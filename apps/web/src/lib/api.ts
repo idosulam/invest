@@ -91,6 +91,17 @@ export const charts = {
   listIndicators: () => request<string[]>("/charts/indicators"),
 };
 
+/* ── Assistant ── */
+
+export const assistant = {
+  query: (question: string, instrumentId: string, contextType = "signal") =>
+    request<any>("/assistant/query", {
+      method: "POST",
+      body: JSON.stringify({ question, instrument_id: instrumentId, context_type: contextType }),
+    }),
+  history: (limit = 20) => request<any[]>(`/assistant/history?limit=${limit}`),
+};
+
 /* ── Scanner ── */
 
 export const scanner = {
