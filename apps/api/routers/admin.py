@@ -25,6 +25,23 @@ from packages.observability.metrics.collectors import metrics
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+# ── Kill Switch State ───────────────────────────────────────
+# In-memory kill switch; persists across requests in same process.
+# For production, store in Redis or DB.
+_kill_switch_active = False
+_kill_switch_reason = ""
+
+
+class KillSwitchRequest(BaseModel):
+    active: bool
+    reason: str = ""
+
+
+class KillSwitchResponse(BaseModel):
+    active: bool
+    reason: str
+    updated_at: Optional[str] = None
+
 
 # ── Schemas ─────────────────────────────────────────────────
 
@@ -216,3 +233,35 @@ async def get_metrics(
 ):
     """Get all collected metrics."""
     return metrics.get_all()
+
+
+@router.get("/kill-switch", response_model=KillSwitchResponse)
+async def get_kill_switch(
+    _user: User = Depends(require_admin),
+):
+    """Get current kill switch status."""
+    return KillSwitchResponse(
+        active=_kill_switch_active,
+        reason=_kill_switch_reason,
+    )
+
+
+@router.post("/kill-switch", response_model=KillSwitchResponse)
+async def set_kill_switch(
+    req: KillSwitchRequest,
+    _user: User = Depends(require_admin),
+):
+    """Activate or deactivate the kill switch.
+
+    When active, ALL signal generation is suppressed.
+    Use during quality incidents, data outages, or system maintenance.
+    """
+    global _kill_switch_active, _kill_switch_reason
+    _kill_switch_active = req.active
+    _kill_switch_reason = req.reason if req.active else ""
+
+    return KillSwitchResponse(
+        active=_kill_switch_active,
+        reason=_kill_switch_reason,
+        updated_at=datetime.utcnow().isoformat(),
+    )

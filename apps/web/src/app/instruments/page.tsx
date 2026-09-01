@@ -14,8 +14,15 @@ export default function InstrumentsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addSymbol, setAddSymbol] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addType, setAddType] = useState("STOCK");
+  const [adding, setAdding] = useState(false);
+  const [fetchingData, setFetchingData] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const { data, isLoading } = useInstruments({
+  const { data, isLoading, mutate } = useInstruments({
     page,
     page_size: 50,
     search: search || undefined,
@@ -31,7 +38,129 @@ export default function InstrumentsPage() {
       <Header
         title="Instruments"
         subtitle={`${total} instruments tracked`}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setFetchingData(true);
+                try {
+                  const token = localStorage.getItem("token");
+                  const res = await fetch("/api/v1/admin/ingest", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ symbols: ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"], timeframe: "1D" }),
+                  });
+                  if (res.ok) {
+                    const d = await res.json();
+                    setMessage(`Fetched data: ${d.inserted} bars inserted`);
+                    setTimeout(() => setMessage(""), 5000);
+                  }
+                } catch (e) { console.error(e); }
+                finally { setFetchingData(false); }
+              }}
+              disabled={fetchingData}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-surface-200 rounded-lg hover:bg-surface-50 disabled:opacity-50"
+            >
+              {fetchingData ? "Fetching..." : "Fetch Sample Data"}
+            </button>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+            >
+              <Plus className="w-4 h-4" />
+              Add Instrument
+            </button>
+          </div>
+        }
       />
+
+      {/* Message */}
+      {message && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-success-600">
+          {message}
+        </div>
+      )}
+
+      {/* Add Form */}
+      {showAddForm && (
+        <Card className="mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Symbol</label>
+              <input
+                type="text"
+                value={addSymbol}
+                onChange={(e) => setAddSymbol(e.target.value.toUpperCase())}
+                placeholder="AAPL"
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Name</label>
+              <input
+                type="text"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="Apple Inc."
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Type</label>
+              <select
+                value={addType}
+                onChange={(e) => setAddType(e.target.value)}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              >
+                <option value="STOCK">Stock</option>
+                <option value="ETF">ETF</option>
+                <option value="BENCHMARK">Benchmark</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={async () => {
+                  if (!addSymbol || !addName) return;
+                  setAdding(true);
+                  try {
+                    const token = localStorage.getItem("token");
+                    const res = await fetch("/api/v1/instruments", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                      },
+                      body: JSON.stringify({ symbol: addSymbol, name: addName, type: addType }),
+                    });
+                    if (res.ok) {
+                      setAddSymbol("");
+                      setAddName("");
+                      setShowAddForm(false);
+                      mutate();
+                    }
+                  } catch (e) { console.error(e); }
+                  finally { setAdding(false); }
+                }}
+                disabled={adding || !addSymbol || !addName}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              >
+                {adding ? "Adding..." : "Add"}
+              </button>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="px-4 py-2 text-sm text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* ── Filters ── */}
       <Card className="mb-6" padding="sm">

@@ -55,9 +55,11 @@ class ReasoningEngine:
     Production: Routes to local LLM (Ollama/vLLM) with evidence context.
     """
 
-    def __init__(self):
+    def __init__(self, llm_base_url: Optional[str] = None, llm_model: str = "qwen3:8b"):
         self.compiler = EvidenceCompiler()
         self.validator = ExplanationValidator()
+        self.llm_base_url = llm_base_url  # e.g., "http://localhost:11434" for Ollama
+        self.llm_model = llm_model
 
     async def explain(
         self,
@@ -178,6 +180,64 @@ class ReasoningEngine:
 
         MVP: Template-based. Production: LLM with evidence context.
         """
+        # Try LLM first if configured
+        if self.llm_base_url:
+            try:
+                return self._llm_explanation(request, package, tool_results)
+            except Exception:
+                pass  # Fall back to template
+
+        return self._template_explanation(request, package, tool_results)
+
+    def _llm_explanation(
+        self,
+        request: ExplanationRequest,
+        package: EvidencePackage,
+        tool_results: dict,
+    ) -> str:
+        """Generate explanation using local LLM (Ollama/vLLM)."""
+        import httpx
+
+        # Build evidence context for LLM
+        context_parts = []
+        for item in package.items:
+            context_parts.append(f"[{item.source}] {item.data}")
+
+        evidence_context = "\n".join(context_parts)
+
+        prompt = f"""You are a financial research assistant. Answer the user's question using ONLY the provided evidence.
+
+Question: {request.question}
+Instrument: {package.instrument_symbol}
+
+Evidence:
+{evidence_context}
+
+Provide a clear, concise analysis. Reference specific data points from the evidence.
+Always include a disclaimer that this is research analysis, not financial advice.
+"""
+
+        response = httpx.post(
+            f"{self.llm_base_url}/api/generate",
+            json={
+                "model": self.llm_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.3, "num_predict": 500},
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("response", "")
+
+    def _template_explanation(
+        self,
+        request: ExplanationRequest,
+        package: EvidencePackage,
+        tool_results: dict,
+    ) -> str:
+        """Template-based explanation (MVP fallback)."""
         inst_info = tool_results.get("get_instrument_info", {})
         symbol = inst_info.get("symbol", "?") if inst_info else "?"
         name = inst_info.get("name", "?") if inst_info else "?"

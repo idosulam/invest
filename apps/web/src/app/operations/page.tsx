@@ -58,12 +58,15 @@ export default function OperationsPage() {
   const [loading, setLoading] = useState(true);
   const [ingesting, setIngesting] = useState(false);
   const [ingestSymbols, setIngestSymbols] = useState("AAPL,MSFT,GOOGL,NVDA,TSLA");
+  const [killSwitch, setKillSwitch] = useState<{ active: boolean; reason: string }>({ active: false, reason: "" });
+  const [killReason, setKillReason] = useState("");
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
   useEffect(() => {
     fetchData();
+    fetchKillSwitch();
   }, []);
 
   const fetchData = async () => {
@@ -99,6 +102,33 @@ export default function OperationsPage() {
     finally { setIngesting(false); }
   };
 
+  const fetchKillSwitch = async () => {
+    try {
+      const res = await fetch("/api/v1/admin/kill-switch", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setKillSwitch(data);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const toggleKillSwitch = async () => {
+    try {
+      const res = await fetch("/api/v1/admin/kill-switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({
+          active: !killSwitch.active,
+          reason: killSwitch.active ? "" : killReason || "Manual activation",
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKillSwitch(data);
+      }
+    } catch (e) { console.error(e); }
+  };
+
   const statusColor = (s: string) => {
     if (s === "SUCCESS") return "text-success-500";
     if (s === "FAILED") return "text-danger-500";
@@ -132,6 +162,52 @@ export default function OperationsPage() {
         </div>
       ) : (
         <>
+          {/* Kill Switch */}
+          <Card className={`mb-6 ${killSwitch.active ? "border-2 border-danger-500" : ""}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${killSwitch.active ? "bg-red-50" : "bg-green-50"}`}>
+                  {killSwitch.active ? (
+                    <XCircle className="w-6 h-6 text-danger-500" />
+                  ) : (
+                    <CheckCircle className="w-6 h-6 text-success-500" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-surface-900">
+                    Kill Switch: {killSwitch.active ? "ACTIVE" : "Inactive"}
+                  </p>
+                  <p className="text-sm text-surface-700">
+                    {killSwitch.active
+                      ? `All signal generation suppressed — ${killSwitch.reason}`
+                      : "Signal generation is running normally"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {!killSwitch.active && (
+                  <input
+                    type="text"
+                    value={killReason}
+                    onChange={(e) => setKillReason(e.target.value)}
+                    placeholder="Reason for activation"
+                    className="text-sm border border-surface-200 rounded-lg px-3 py-2 w-64"
+                  />
+                )}
+                <button
+                  onClick={toggleKillSwitch}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                    killSwitch.active
+                      ? "bg-success-500 text-white hover:bg-success-600"
+                      : "bg-danger-500 text-white hover:bg-danger-600"
+                  }`}
+                >
+                  {killSwitch.active ? "Deactivate" : "Activate Kill Switch"}
+                </button>
+              </div>
+            </div>
+          </Card>
+
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <Card padding="sm">

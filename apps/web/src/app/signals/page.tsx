@@ -215,6 +215,27 @@ function SignalCard({ signal }: { signal: SignalData }) {
             </div>
           )}
 
+          {/* Confidence Breakdown */}
+          <div>
+            <p className="text-xs text-surface-700 mb-1.5">Confidence Breakdown</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                { label: "Strategy Validation", weight: "20%" },
+                { label: "Regime Similarity", weight: "15%" },
+                { label: "Feature Completeness", weight: "15%" },
+                { label: "Signal Agreement", weight: "20%" },
+                { label: "Liquidity", weight: "10%" },
+                { label: "Model Calibration", weight: "10%" },
+                { label: "Parameter Sensitivity", weight: "10%" },
+              ].map((comp) => (
+                <div key={comp.label} className="bg-surface-50 rounded p-2">
+                  <p className="text-xs text-surface-700">{comp.label}</p>
+                  <p className="text-xs text-surface-200">{comp.weight}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Reason codes */}
           {signal.reason_codes && signal.reason_codes.length > 0 && (
             <div>
@@ -300,6 +321,32 @@ export default function SignalsPage() {
     fetchSignals();
   }, [horizonFilter, stateFilter]);
 
+  const [generating, setGenerating] = useState(false);
+  const [genInstrumentId, setGenInstrumentId] = useState("");
+
+  const generateSignals = async () => {
+    if (!genInstrumentId) return;
+    setGenerating(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch("/api/v1/signals/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ instrument_id: genInstrumentId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`Generated ${data.signals_generated} signals`);
+        // Refresh signals list
+        window.location.reload();
+      }
+    } catch (e) { console.error(e); }
+    finally { setGenerating(false); }
+  };
+
   return (
     <div>
       <Header
@@ -307,6 +354,20 @@ export default function SignalsPage() {
         subtitle={`${total} active signals`}
         actions={
           <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={genInstrumentId}
+              onChange={(e) => setGenInstrumentId(e.target.value)}
+              placeholder="Instrument ID"
+              className="text-sm border border-surface-200 rounded-lg px-3 py-2 w-48"
+            />
+            <button
+              onClick={generateSignals}
+              disabled={generating || !genInstrumentId}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              {generating ? "Generating..." : "Generate"}
+            </button>
             <select
               value={horizonFilter}
               onChange={(e) => setHorizonFilter(e.target.value)}

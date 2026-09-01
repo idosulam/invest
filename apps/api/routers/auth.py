@@ -55,7 +55,11 @@ class UserResponse(BaseModel):
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    """Register a new user (default role: VIEWER)."""
+    """Register a new user.
+
+    First user automatically becomes ADMIN.
+    Subsequent users default to VIEWER.
+    """
     # Check existing
     existing = await db.execute(
         select(User).where((User.email == req.email) | (User.username == req.username))
@@ -63,11 +67,15 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email or username already exists")
 
+    # First user becomes admin
+    user_count = (await db.execute(select(User.id).limit(1))).scalar_one_or_none()
+    role = UserRole.ADMIN if user_count is None else UserRole.VIEWER
+
     user = User(
         email=req.email,
         username=req.username,
         password_hash=hash_password(req.password),
-        role=UserRole.VIEWER,
+        role=role,
     )
     db.add(user)
     await db.flush()

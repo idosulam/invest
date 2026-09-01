@@ -286,6 +286,152 @@ def supertrend(
     return supertrend_line
 
 
+# ── Intraday Indicators ───────────────────────────────────────
+
+def session_vwap(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+    session_mask: Optional[pd.Series] = None,
+) -> pd.Series:
+    """Session VWAP (Volume-Weighted Average Price).
+
+    Cumulative from session start. If session_mask is provided,
+    resets at each new session boundary (True = in session).
+
+    Args:
+        high, low, close: Price series.
+        volume: Volume series.
+        session_mask: Boolean series marking session bars.
+
+    Returns:
+        Session VWAP series.
+    """
+    typical_price = (high + low + close) / 3
+    tp_vol = typical_price * volume
+
+    if session_mask is not None:
+        # Reset cumulative sums at session boundaries
+        group = (~session_mask).cumsum()
+        cum_tp_vol = tp_vol.groupby(group).cumsum()
+        cum_vol = volume.groupby(group).cumsum()
+    else:
+        cum_tp_vol = tp_vol.cumsum()
+        cum_vol = volume.cumsum()
+
+    return cum_tp_vol / cum_vol.replace(0, np.nan)
+
+
+def opening_range(
+    high: pd.Series,
+    low: pd.Series,
+    session_mask: pd.Series,
+    or_bars: int = 6,
+) -> tuple[pd.Series, pd.Series]:
+    """Opening Range high/low.
+
+    Computes the high and low of the first `or_bars` bars of each session.
+
+    Args:
+        high, low: Price series.
+        session_mask: Boolean series marking session bars.
+        or_bars: Number of bars defining the opening range (e.g., 6 × 5m = 30min).
+
+    Returns:
+        Tuple of (or_high, or_low) series — constant within each session.
+    """
+    group = (~session_mask).cumsum()
+    bar_in_session = session_mask.groupby(group).cumsum()
+
+    in_or = bar_in_session <= or_bars
+
+    or_high = high.where(in_or).groupby(group).transform("max")
+    or_low = low.where(in_or).groupby(group).transform("min")
+
+    # Forward-fill to end of session
+    or_high = or_high.ffill()
+    or_low = or_low.ffill()
+
+    return or_high, or_low
+
+
+def volume_rate_of_change(volume: pd.Series, period: int = 14) -> pd.Series:
+    """Volume Rate of Change.
+
+    Args:
+        volume: Volume series.
+        period: Lookback period.
+
+    Returns:
+        VROC as a ratio (1.0 = no change).
+    """
+    prev_vol = volume.shift(period)
+    return volume / prev_vol.replace(0, np.nan)
+
+
+def keltner_channels(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    ema_period: int = 20,
+    atr_period: int = 10,
+    multiplier: float = 2.0,
+) -> BollingerResult:
+    """Keltner Channels (EMA-based volatility bands).
+
+    Args:
+        high, low, close: Price series.
+        ema_period: EMA window.
+        atr_period: ATR window.
+        multiplier: ATR multiplier for bands.
+
+    Returns:
+        BollingerResult with upper, middle, lower, bandwidth, pct_b.
+    """
+    middle = ema(close, ema_period)
+    atr_val = atr(high, low, close, atr_period)
+
+    upper = middle + (multiplier * atr_val)
+    lower = middle - (multiplier * atr_val)
+
+    bandwidth = (upper - lower) / middle
+    pct_b = (close - lower) / (upper - lower)
+
+    return BollingerResult(
+        upper=upper, middle=middle, lower=lower,
+        bandwidth=bandwidth, pct_b=pct_b,
+    )
+
+
+def intraday_momentum_index(
+    close: pd.Series,
+    period: int = 14,
+) -> pd.Series:
+    """Intraday Momentum Index (IMI).
+
+    Similar to RSI but uses open-to-close within each bar.
+    For intraday bars: measures buying vs selling pressure.
+
+    Args:
+        close: Close price series.
+        period: Lookback period.
+
+    Returns:
+        IMI values in [0, 100].
+    """
+    # Use close-to-close as proxy for intraday direction
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+
+    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
 # ── Convenience: compute all canonical indicators at once ───
 
 @dataclass

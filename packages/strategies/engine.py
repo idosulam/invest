@@ -24,8 +24,10 @@ from packages.strategies.registry.strategy_base import (
     StrategyRegistry, MarketContext, RawSignal,
 )
 from packages.risk.gate import RiskGate
+from packages.risk.confidence import ConfidenceCalculator
 from packages.features.indicators.canonical import (
-    sma, ema, rsi, macd, bollinger_bands, atr, obv, adx,
+    sma, ema, rsi, macd, bollinger_bands, atr, obv, adx, vwap_rolling,
+    session_vwap, volume_rate_of_change, keltner_channels,
 )
 
 
@@ -63,7 +65,17 @@ async def get_bars_for_instrument(
     ])
 
 
-def compute_indicators(df: pd.DataFrame) -> dict[str, pd.Series]:
+def get_timeframe_for_horizon(horizon: Horizon) -> Timeframe:
+    """Map strategy horizon to appropriate bar timeframe."""
+    if horizon == Horizon.INTRADAY:
+        return Timeframe.MINUTE_5
+    elif horizon == Horizon.SWING:
+        return Timeframe.DAILY
+    else:  # LONG_TERM
+        return Timeframe.DAILY
+
+
+def compute_indicators(df: pd.DataFrame, timeframe: Timeframe = Timeframe.DAILY) -> dict[str, pd.Series]:
     """Compute all canonical indicators for a bar DataFrame."""
     if df.empty or len(df) < 20:
         return {}
@@ -108,6 +120,20 @@ def compute_indicators(df: pd.DataFrame) -> dict[str, pd.Series]:
     # Volume
     indicators["obv"] = obv(close, volume)
 
+    # Intraday-specific indicators
+    if timeframe in (Timeframe.MINUTE_1, Timeframe.MINUTE_5, Timeframe.MINUTE_15, Timeframe.HOURLY):
+        if len(df) >= 20:
+            indicators["vwap_rolling"] = vwap_rolling(high, low, close, volume, 20)
+            indicators["vroc_14"] = volume_rate_of_change(volume, 14)
+            kc = keltner_channels(high, low, close, 20, 10, 2.0)
+            indicators["kc_upper"] = kc.upper
+            indicators["kc_middle"] = kc.middle
+            indicators["kc_lower"] = kc.lower
+    else:
+        # Daily VWAP
+        if len(df) >= 20:
+            indicators["vwap_rolling"] = vwap_rolling(high, low, close, volume, 20)
+
     return indicators
 
 
@@ -133,6 +159,15 @@ async def get_fundamentals(
     return fundamentals
 
 
+def is_kill_switch_active() -> bool:
+    """Check if the kill switch is active (suppresses all signals)."""
+    try:
+        from apps.api.routers.admin import _kill_switch_active
+        return _kill_switch_active
+    except ImportError:
+        return False
+
+
 async def generate_signals_for_instrument(
     db: AsyncSession,
     instrument_id: uuid.UUID,
@@ -143,19 +178,30 @@ async def generate_signals_for_instrument(
 
     Returns list of signal dicts ready for DB insertion.
     """
+    # Check kill switch
+    if is_kill_switch_active():
+        return [{"strategy": "ALL", "error": "Kill switch active — signal generation suppressed"}]
+
     # Get instrument
     inst_result = await db.execute(select(Instrument).where(Instrument.id == instrument_id))
     instrument = inst_result.scalar_one_or_none()
     if not instrument or instrument.status.value != "ACTIVE":
         return []
 
-    # Get bars
-    df = await get_bars_for_instrument(db, instrument_id)
+    # Get bars — use appropriate timeframe for horizon
+    target_timeframe = get_timeframe_for_horizon(horizon) if horizon else Timeframe.DAILY
+    df = await get_bars_for_instrument(db, instrument_id, timeframe=target_timeframe)
+
+    # Fallback to daily if intraday bars not available
+    if df.empty and target_timeframe != Timeframe.DAILY:
+        df = await get_bars_for_instrument(db, instrument_id, timeframe=Timeframe.DAILY)
+        target_timeframe = Timeframe.DAILY
+
     if df.empty or len(df) < 20:
         return []
 
     # Compute indicators
-    indicators = compute_indicators(df)
+    indicators = compute_indicators(df, timeframe=target_timeframe)
 
     # Get fundamentals
     fundamentals = await get_fundamentals(db, instrument_id)
@@ -193,6 +239,7 @@ async def generate_signals_for_instrument(
 
     # Run each strategy through risk gate
     risk_gate = RiskGate()
+    confidence_calc = ConfidenceCalculator()
     signals = []
 
     for strategy in strategies:
@@ -223,6 +270,22 @@ async def generate_signals_for_instrument(
             db.add(strat_version)
             await db.flush()
 
+            # Calculate deterministic confidence
+            conf_result = confidence_calc.calculate(
+                strategy_validation_score=0.5,  # default until backtests exist
+                regime_similarity=0.5,
+                feature_completeness=1.0,
+                signal_agreement_count=1,
+                total_strategies=len(strategies),
+                avg_daily_volume=float(df["volume"].tail(20).mean()) if len(df) >= 20 else 0,
+                data_staleness_hours=0,
+                model_validated=False,
+                parameter_sensitivity_score=0.5,
+            )
+
+            # Use the lower of risk gate confidence and calculated confidence
+            final_confidence = min(gate_result.adjusted_confidence, conf_result.final_confidence)
+
             # Create signal record
             signal = Signal(
                 instrument_id=instrument_id,
@@ -236,13 +299,13 @@ async def generate_signals_for_instrument(
                 target_method=raw_signal.target_method,
                 max_loss_pct=strategy.risk_plan(raw_signal).max_loss_pct,
                 suggested_size_pct=strategy.risk_plan(raw_signal).suggested_size_pct,
-                confidence=Decimal(str(gate_result.adjusted_confidence)),
+                confidence=Decimal(str(final_confidence)),
                 quality_gate=gate_result.quality_gate,
                 strategy_version_id=strat_version.id,
                 data_snapshot_id=snapshot.id,
                 evidence_ids=[],
-                reason_codes=raw_signal.reason_codes + gate_result.adjustments,
-                limitations=raw_signal.limitations + gate_result.blockers,
+                reason_codes=raw_signal.reason_codes + gate_result.adjustments + [f"confidence_components:{len(conf_result.components)}"],
+                limitations=raw_signal.limitations + gate_result.blockers + conf_result.caps_applied,
             )
             db.add(signal)
             signals.append({

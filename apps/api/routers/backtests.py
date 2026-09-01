@@ -19,6 +19,11 @@ from packages.domain.enums.common import BacktestStatus, Timeframe
 from packages.backtest.vectorized.engine import (
     BacktestConfig, run_sma_crossover_backtest, run_rsi_backtest,
 )
+from packages.backtest.event_driven.engine import (
+    EventDrivenBacktester, BacktestConfig as EventBacktestConfig,
+)
+from packages.features.indicators.canonical import sma, rsi as rsi_indicator, atr
+import numpy as np
 import pandas as pd
 
 router = APIRouter(prefix="/backtests", tags=["backtests"])
@@ -260,4 +265,317 @@ async def get_backtest(
         error=run.error,
         created_at=run.created_at,
         completed_at=run.completed_at,
+    )
+
+
+# ── Event-Driven Backtest ───────────────────────────────────
+
+class EventDrivenBacktestRequest(BaseModel):
+    instrument_id: uuid.UUID
+    strategy: str = "sma_crossover"  # sma_crossover | rsi_reversion
+    timeframe: Timeframe = Timeframe.DAILY
+    fast_period: int = 20
+    slow_period: int = 50
+    rsi_period: int = 14
+    rsi_oversold: float = 30
+    rsi_overbought: float = 70
+    initial_capital: float = 100000
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
+    position_size_pct: float = 0.1
+    fill_delay_bars: int = 0
+    seed: int = 42
+
+
+class WalkForwardRequest(BaseModel):
+    instrument_id: uuid.UUID
+    strategy: str = "sma_crossover"
+    timeframe: Timeframe = Timeframe.DAILY
+    fast_period: int = 20
+    slow_period: int = 50
+    rsi_period: int = 14
+    n_splits: int = 5
+    train_pct: float = 0.7
+    initial_capital: float = 100000
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
+    seed: int = 42
+
+
+class WalkForwardResult(BaseModel):
+    splits: list[BacktestMetricsResponse]
+    avg_return: float
+    avg_sharpe: float
+    avg_max_drawdown: float
+    consistency: float  # fraction of profitable splits
+
+
+@router.post("/event-driven", response_model=BacktestResponse)
+async def run_event_driven_backtest(
+    req: EventDrivenBacktestRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_analyst),
+):
+    """Run an event-driven backtest with realistic fills and latency."""
+    inst_result = await db.execute(select(Instrument).where(Instrument.id == req.instrument_id))
+    instrument = inst_result.scalar_one_or_none()
+    if not instrument:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+
+    result = await db.execute(
+        select(MarketBar)
+        .where(
+            MarketBar.instrument_id == req.instrument_id,
+            MarketBar.timeframe == req.timeframe,
+        )
+        .order_by(MarketBar.ts_open)
+    )
+    bars = result.scalars().all()
+    if len(bars) < 60:
+        raise HTTPException(status_code=400, detail=f"Need at least 60 bars, got {len(bars)}")
+
+    df = pd.DataFrame([
+        {
+            "ts_open": b.ts_open,
+            "open": float(b.open),
+            "high": float(b.high),
+            "low": float(b.low),
+            "close": float(b.close),
+            "volume": float(b.volume),
+        }
+        for b in bars
+    ])
+
+    # Build signal function based on strategy
+    def make_signal_fn(strategy: str, fast: int, slow: int, rsi_p: int, os: float, ob: float):
+        def signal_fn(bars_df: pd.DataFrame, idx: int) -> Optional[str]:
+            if idx < max(fast, slow, rsi_p) + 5:
+                return None
+            close = bars_df["close"].iloc[:idx + 1]
+            if strategy == "sma_crossover":
+                sma_fast = sma(close, fast).iloc[-1]
+                sma_slow = sma(close, slow).iloc[-1]
+                sma_fast_prev = sma(close, fast).iloc[-2]
+                sma_slow_prev = sma(close, slow).iloc[-2]
+                if sma_fast_prev <= sma_slow_prev and sma_fast > sma_slow:
+                    return "BUY"
+                elif sma_fast_prev >= sma_slow_prev and sma_fast < sma_slow:
+                    return "SELL"
+            elif strategy == "rsi_reversion":
+                rsi_val = rsi_indicator(close, rsi_p).iloc[-1]
+                rsi_prev = rsi_indicator(close, rsi_p).iloc[-2]
+                if rsi_prev < os and rsi_val >= os:
+                    return "BUY"
+                elif rsi_val > ob:
+                    return "SELL"
+            return None
+        return signal_fn
+
+    signal_fn = make_signal_fn(
+        req.strategy, req.fast_period, req.slow_period,
+        req.rsi_period, req.rsi_oversold, req.rsi_overbought,
+    )
+
+    config = EventBacktestConfig(
+        initial_capital=req.initial_capital,
+        commission_pct=req.commission_pct,
+        slippage_pct=req.slippage_pct,
+        max_position_pct=req.position_size_pct,
+        fill_delay_bars=req.fill_delay_bars,
+        seed=req.seed,
+    )
+
+    backtester = EventDrivenBacktester(config)
+    bt_result = backtester.run(df, signal_fn)
+
+    # Persist
+    db_run = BacktestRun(
+        snapshot_id=uuid.uuid4(),
+        strategy_version_id=uuid.uuid4(),
+        assumptions={
+            "strategy": req.strategy,
+            "engine": "event_driven",
+            "timeframe": req.timeframe.value,
+            "fill_delay_bars": req.fill_delay_bars,
+            "initial_capital": req.initial_capital,
+            "commission_pct": req.commission_pct,
+            "slippage_pct": req.slippage_pct,
+            "seed": req.seed,
+        },
+        metrics={
+            "total_return": bt_result.metrics.total_return,
+            "annualized_return": bt_result.metrics.annualized_return,
+            "sharpe_ratio": bt_result.metrics.sharpe_ratio,
+            "sortino_ratio": bt_result.metrics.sortino_ratio,
+            "max_drawdown": bt_result.metrics.max_drawdown,
+            "calmar_ratio": bt_result.metrics.calmar_ratio,
+            "win_rate": bt_result.metrics.win_rate,
+            "payoff_ratio": bt_result.metrics.payoff_ratio,
+            "total_trades": bt_result.metrics.total_trades,
+            "total_commission": bt_result.metrics.total_commission,
+            "total_slippage": bt_result.metrics.total_slippage,
+            "benchmark_return": bt_result.metrics.benchmark_return,
+            "alpha": bt_result.metrics.alpha,
+        },
+        status=BacktestStatus.COMPLETED,
+        started_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+    )
+    db.add(db_run)
+    await db.flush()
+
+    return BacktestResponse(
+        id=db_run.id,
+        instrument_id=req.instrument_id,
+        symbol=instrument.symbol,
+        strategy_name=f"{req.strategy} (event-driven)",
+        status="COMPLETED",
+        metrics=BacktestMetricsResponse(
+            total_return=bt_result.metrics.total_return,
+            annualized_return=bt_result.metrics.annualized_return,
+            volatility=bt_result.metrics.volatility,
+            sharpe_ratio=bt_result.metrics.sharpe_ratio,
+            sortino_ratio=bt_result.metrics.sortino_ratio,
+            max_drawdown=bt_result.metrics.max_drawdown,
+            calmar_ratio=bt_result.metrics.calmar_ratio,
+            win_rate=bt_result.metrics.win_rate,
+            payoff_ratio=bt_result.metrics.payoff_ratio,
+            total_trades=bt_result.metrics.total_trades,
+            avg_trade_duration_days=bt_result.metrics.avg_bars_held,
+            exposure_pct=bt_result.metrics.exposure,
+            turnover=bt_result.metrics.turnover,
+            total_costs=bt_result.metrics.total_commission + bt_result.metrics.total_slippage,
+        ),
+        equity_curve=[round(v, 2) for v in bt_result.equity_curve.tolist()[-500:]],
+        drawdown_curve=[round(v, 4) for v in bt_result.drawdown_curve.tolist()[-500:]],
+        timestamps=[str(t) for t in bt_result.equity_curve.index[-500:]],
+        trades_count=len(bt_result.trades),
+        config=db_run.assumptions,
+        created_at=db_run.created_at,
+        completed_at=db_run.completed_at,
+    )
+
+
+@router.post("/walk-forward", response_model=WalkForwardResult)
+async def run_walk_forward(
+    req: WalkForwardRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_analyst),
+):
+    """Run walk-forward validation with chronological train/test splits.
+
+    PRD Section 6: chronological train/validation/test splits,
+    walk-forward evaluation, benchmark comparison.
+    """
+    inst_result = await db.execute(select(Instrument).where(Instrument.id == req.instrument_id))
+    instrument = inst_result.scalar_one_or_none()
+    if not instrument:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+
+    result = await db.execute(
+        select(MarketBar)
+        .where(
+            MarketBar.instrument_id == req.instrument_id,
+            MarketBar.timeframe == req.timeframe,
+        )
+        .order_by(MarketBar.ts_open)
+    )
+    bars = result.scalars().all()
+    if len(bars) < 200:
+        raise HTTPException(status_code=400, detail=f"Walk-forward needs 200+ bars, got {len(bars)}")
+
+    df = pd.DataFrame([
+        {
+            "ts_open": b.ts_open,
+            "open": float(b.open),
+            "high": float(b.high),
+            "low": float(b.low),
+            "close": float(b.close),
+            "volume": float(b.volume),
+        }
+        for b in bars
+    ])
+
+    # Build signal function
+    def make_signal_fn(strategy: str, fast: int, slow: int, rsi_p: int):
+        def signal_fn(bars_df: pd.DataFrame, idx: int) -> Optional[str]:
+            if idx < max(fast, slow, rsi_p) + 5:
+                return None
+            close = bars_df["close"].iloc[:idx + 1]
+            if strategy == "sma_crossover":
+                sma_fast = sma(close, fast).iloc[-1]
+                sma_slow = sma(close, slow).iloc[-1]
+                sma_fast_prev = sma(close, fast).iloc[-2]
+                sma_slow_prev = sma(close, slow).iloc[-2]
+                if sma_fast_prev <= sma_slow_prev and sma_fast > sma_slow:
+                    return "BUY"
+                elif sma_fast_prev >= sma_slow_prev and sma_fast < sma_slow:
+                    return "SELL"
+            elif strategy == "rsi_reversion":
+                rsi_val = rsi_indicator(close, rsi_p).iloc[-1]
+                rsi_prev = rsi_indicator(close, rsi_p).iloc[-2]
+                if rsi_prev < 30 and rsi_val >= 30:
+                    return "BUY"
+                elif rsi_val > 70:
+                    return "SELL"
+            return None
+        return signal_fn
+
+    signal_fn = make_signal_fn(req.strategy, req.fast_period, req.slow_period, req.rsi_period)
+
+    # Walk-forward splits
+    n = len(df)
+    split_size = n // req.n_splits
+    splits = []
+
+    for i in range(req.n_splits):
+        start = i * split_size
+        end = min((i + 1) * split_size + split_size // 2, n)  # overlap for context
+        if end - start < 60:
+            continue
+
+        split_df = df.iloc[start:end].reset_index(drop=True)
+
+        config = EventBacktestConfig(
+            initial_capital=req.initial_capital,
+            commission_pct=req.commission_pct,
+            slippage_pct=req.slippage_pct,
+            seed=req.seed,
+        )
+
+        backtester = EventDrivenBacktester(config)
+        bt_result = backtester.run(split_df, signal_fn)
+
+        splits.append(BacktestMetricsResponse(
+            total_return=bt_result.metrics.total_return,
+            annualized_return=bt_result.metrics.annualized_return,
+            volatility=bt_result.metrics.volatility,
+            sharpe_ratio=bt_result.metrics.sharpe_ratio,
+            sortino_ratio=bt_result.metrics.sortino_ratio,
+            max_drawdown=bt_result.metrics.max_drawdown,
+            calmar_ratio=bt_result.metrics.calmar_ratio,
+            win_rate=bt_result.metrics.win_rate,
+            payoff_ratio=bt_result.metrics.payoff_ratio,
+            total_trades=bt_result.metrics.total_trades,
+            avg_trade_duration_days=bt_result.metrics.avg_bars_held,
+            exposure_pct=bt_result.metrics.exposure,
+            turnover=bt_result.metrics.turnover,
+            total_costs=bt_result.metrics.total_commission + bt_result.metrics.total_slippage,
+        ))
+
+    if not splits:
+        raise HTTPException(status_code=400, detail="Not enough data for walk-forward splits")
+
+    avg_return = sum(s.total_return for s in splits) / len(splits)
+    avg_sharpe = sum(s.sharpe_ratio for s in splits) / len(splits)
+    avg_dd = sum(s.max_drawdown for s in splits) / len(splits)
+    profitable = sum(1 for s in splits if s.total_return > 0)
+    consistency = profitable / len(splits)
+
+    return WalkForwardResult(
+        splits=splits,
+        avg_return=round(avg_return, 4),
+        avg_sharpe=round(avg_sharpe, 4),
+        avg_max_drawdown=round(avg_dd, 4),
+        consistency=round(consistency, 4),
     )

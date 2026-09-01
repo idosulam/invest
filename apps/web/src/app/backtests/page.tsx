@@ -67,6 +67,20 @@ export default function BacktestsPage() {
   const [runs, setRuns] = useState<BacktestRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState<BacktestRun | null>(null);
+  const [showRunForm, setShowRunForm] = useState(false);
+  const [runForm, setRunForm] = useState({
+    instrument_id: "",
+    strategy: "sma_crossover",
+    engine: "vectorized",
+    timeframe: "1D",
+    fast_period: 20,
+    slow_period: 50,
+    initial_capital: 100000,
+    commission_pct: 0.001,
+    slippage_pct: 0.0005,
+  });
+  const [running, setRunning] = useState(false);
+  const [walkForward, setWalkForward] = useState<any>(null);
 
   useEffect(() => {
     fetchRuns();
@@ -93,6 +107,67 @@ export default function BacktestsPage() {
     }
   };
 
+  const runBacktest = async () => {
+    setRunning(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const endpoint = runForm.engine === "event-driven"
+        ? "/api/v1/backtests/event-driven"
+        : "/api/v1/backtests/run";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(runForm),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRuns((prev) => [data, ...prev]);
+        setSelectedRun(data);
+        setShowRunForm(false);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const runWalkForward = async () => {
+    setRunning(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch("/api/v1/backtests/walk-forward", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          instrument_id: runForm.instrument_id,
+          strategy: runForm.strategy,
+          timeframe: runForm.timeframe,
+          fast_period: runForm.fast_period,
+          slow_period: runForm.slow_period,
+          n_splits: 5,
+          initial_capital: runForm.initial_capital,
+          commission_pct: runForm.commission_pct,
+          slippage_pct: runForm.slippage_pct,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWalkForward(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRunning(false);
+    }
+  };
+
   const bestSharpe = runs.reduce((best, r) => {
     const s = r.metrics?.sharpe_ratio ?? 0;
     return s > best ? s : best;
@@ -109,7 +184,183 @@ export default function BacktestsPage() {
       <Header
         title="Backtest Lab"
         subtitle="Run and analyze strategy backtests"
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowRunForm(!showRunForm)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+            >
+              <Play className="w-4 h-4" />
+              Run Backtest
+            </button>
+          </div>
+        }
       />
+
+      {/* Run Form */}
+      {showRunForm && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Run Backtest</CardTitle>
+          </CardHeader>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Instrument ID</label>
+              <input
+                type="text"
+                value={runForm.instrument_id}
+                onChange={(e) => setRunForm((f) => ({ ...f, instrument_id: e.target.value }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                placeholder="UUID"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Strategy</label>
+              <select
+                value={runForm.strategy}
+                onChange={(e) => setRunForm((f) => ({ ...f, strategy: e.target.value }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              >
+                <option value="sma_crossover">SMA Crossover</option>
+                <option value="rsi_reversion">RSI Reversion</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Engine</label>
+              <select
+                value={runForm.engine}
+                onChange={(e) => setRunForm((f) => ({ ...f, engine: e.target.value }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              >
+                <option value="vectorized">Vectorized</option>
+                <option value="event-driven">Event-Driven</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Timeframe</label>
+              <select
+                value={runForm.timeframe}
+                onChange={(e) => setRunForm((f) => ({ ...f, timeframe: e.target.value }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              >
+                <option value="1D">Daily</option>
+                <option value="1H">Hourly</option>
+                <option value="15m">15 min</option>
+                <option value="5m">5 min</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Fast Period</label>
+              <input
+                type="number"
+                value={runForm.fast_period}
+                onChange={(e) => setRunForm((f) => ({ ...f, fast_period: Number(e.target.value) }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Slow Period</label>
+              <input
+                type="number"
+                value={runForm.slow_period}
+                onChange={(e) => setRunForm((f) => ({ ...f, slow_period: Number(e.target.value) }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Commission %</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={runForm.commission_pct}
+                onChange={(e) => setRunForm((f) => ({ ...f, commission_pct: Number(e.target.value) }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-700 mb-1">Slippage %</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={runForm.slippage_pct}
+                onChange={(e) => setRunForm((f) => ({ ...f, slippage_pct: Number(e.target.value) }))}
+                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={runBacktest}
+              disabled={running || !runForm.instrument_id}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              Run
+            </button>
+            <button
+              onClick={runWalkForward}
+              disabled={running || !runForm.instrument_id}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-50"
+            >
+              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+              Walk-Forward
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Walk-Forward Results */}
+      {walkForward && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Walk-Forward Validation</CardTitle>
+          </CardHeader>
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            <div>
+              <p className="text-xs text-surface-700">Avg Return</p>
+              <p className="text-lg font-bold">{format.pct(walkForward.avg_return)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-700">Avg Sharpe</p>
+              <p className="text-lg font-bold">{walkForward.avg_sharpe.toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-700">Avg Max DD</p>
+              <p className="text-lg font-bold text-danger-500">{walkForward.avg_max_drawdown.toFixed(2)}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-700">Consistency</p>
+              <p className="text-lg font-bold">{(walkForward.consistency * 100).toFixed(0)}%</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-surface-200">
+                  <th className="text-left py-1 px-2">Split</th>
+                  <th className="text-right py-1 px-2">Return</th>
+                  <th className="text-right py-1 px-2">Sharpe</th>
+                  <th className="text-right py-1 px-2">Max DD</th>
+                  <th className="text-right py-1 px-2">Win Rate</th>
+                  <th className="text-right py-1 px-2">Trades</th>
+                </tr>
+              </thead>
+              <tbody>
+                {walkForward.splits.map((s: any, i: number) => (
+                  <tr key={i} className="border-b border-surface-100">
+                    <td className="py-1 px-2">{i + 1}</td>
+                    <td className={`py-1 px-2 text-right font-mono ${format.changeColor(s.total_return)}`}>{format.pct(s.total_return)}</td>
+                    <td className="py-1 px-2 text-right font-mono">{s.sharpe_ratio.toFixed(2)}</td>
+                    <td className="py-1 px-2 text-right font-mono text-danger-500">{s.max_drawdown.toFixed(2)}%</td>
+                    <td className="py-1 px-2 text-right font-mono">{s.win_rate.toFixed(1)}%</td>
+                    <td className="py-1 px-2 text-right font-mono">{s.total_trades}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

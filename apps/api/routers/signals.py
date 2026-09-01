@@ -24,6 +24,7 @@ from packages.strategies.registry.strategy_base import StrategyRegistry
 # Import strategies to trigger registration
 import packages.strategies.swing  # noqa: F401
 import packages.strategies.long_term  # noqa: F401
+import packages.strategies.intraday  # noqa: F401
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
