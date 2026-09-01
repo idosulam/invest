@@ -39,7 +39,6 @@ dependencies = [
     "pyarrow>=14.0.0",
 
     # ── Indicators ──
-    "ta-lib>=0.4.28",
     "pandas-ta-classic>=0.3.14b1",
 
     # ── Backtesting ──
