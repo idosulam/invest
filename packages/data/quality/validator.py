@@ -1,259 +1,278 @@
-"""Data quality validation pipeline — PRD Section 4.3.
+"""Data quality validator — PRD Section 4.3.
 
-Validates incoming data for:
-- Schema correctness
-- Price relationships (high >= low, etc.)
-- Duplicate detection
-- Monotonic timestamps
-- Timezone consistency
-- Stale data detection
+Validates data at each stage of the ingestion pipeline:
+1. Schema validation
+2. Timezone and timestamp checks
+3. Price relationship checks (high >= low, etc.)
+4. Duplicate detection
+5. Monotonic timestamp verification
+6. Staleness detection
+7. Completeness checks
 """
 
-import hashlib
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from packages.data.providers.base import Bar, CorporateActionRecord, InstrumentRecord
-from packages.domain.enums.common import DataQualityStatus
-
-logger = logging.getLogger(__name__)
+import pandas as pd
 
 
 @dataclass
 class QualityIssue:
-    """A data quality issue found during validation."""
+    """A detected data quality issue."""
+    issue_type: str  # schema, price, duplicate, stale, missing, monotonic
     severity: str  # LOW, MEDIUM, HIGH, CRITICAL
-    issue_type: str
     description: str
-    symbol: Optional[str] = None
-    timestamp: Optional[datetime] = None
+    affected_rows: int = 0
+    details: dict = field(default_factory=dict)
 
 
 @dataclass
-class ValidationResult:
-    """Result of validating a data batch."""
-    status: DataQualityStatus
-    total_records: int
-    valid_records: int
-    rejected_records: int
+class QualityReport:
+    """Result of a quality validation pass."""
+    passed: bool
+    score: float  # 0.0 - 1.0
     issues: list[QualityIssue] = field(default_factory=list)
-    content_hash: Optional[str] = None
+    rows_checked: int = 0
+    rows_passed: int = 0
+    rows_failed: int = 0
+    checked_at: datetime = field(default_factory=datetime.utcnow)
 
-    @property
-    def pass_rate(self) -> float:
-        return self.valid_records / self.total_records if self.total_records > 0 else 0.0
 
+class DataQualityValidator:
+    """Validates market data quality.
 
-class DataValidator:
-    """Validates market data quality before ingestion."""
+    PRD 4.3 requirements:
+    - Validate schema, timezone, price relationships, duplicates
+    - Check monotonic timestamps
+    - Detect stale data
+    - Report completeness
+    """
 
     def __init__(
         self,
-        max_price_change_pct: float = 50.0,  # Max single-day change %
-        max_staleness_days: int = 7,  # Max days without new data
-        min_volume: Decimal = Decimal("0"),
+        max_staleness_hours: int = 48,
+        min_completeness: float = 0.95,
+        max_gap_ratio: float = 0.05,
     ):
-        self._max_price_change = max_price_change_pct
-        self._max_staleness = max_staleness_days
-        self._min_volume = min_volume
+        self.max_staleness = timedelta(hours=max_staleness_hours)
+        self.min_completeness = min_completeness
+        self.max_gap_ratio = max_gap_ratio
 
-    def validate_bars(self, bars: list[Bar]) -> ValidationResult:
-        """Validate a batch of OHLCV bars."""
-        issues: list[QualityIssue] = []
-        valid = 0
-        rejected = 0
+    def validate_bars(self, df: pd.DataFrame) -> QualityReport:
+        """Validate a DataFrame of OHLCV bars.
 
-        # Sort by timestamp for monotonic check
-        sorted_bars = sorted(bars, key=lambda b: b.ts_open)
+        Args:
+            df: DataFrame with columns: ts_open, open, high, low, close, volume
 
-        prev_ts = None
-        prev_close = None
+        Returns:
+            QualityReport with issues and score
+        """
+        issues = []
+        rows_checked = len(df)
 
-        for bar in sorted_bars:
-            bar_valid = True
+        if rows_checked == 0:
+            return QualityReport(
+                passed=False, score=0, rows_checked=0,
+                issues=[QualityIssue("schema", "CRITICAL", "No data to validate")],
+            )
 
-            # 1. Price relationship checks
-            if bar.high < bar.low:
+        # 1. Schema check
+        required_cols = {"ts_open", "open", "high", "low", "close", "volume"}
+        missing_cols = required_cols - set(df.columns)
+        if missing_cols:
+            issues.append(QualityIssue(
+                "schema", "CRITICAL",
+                f"Missing columns: {missing_cols}",
+                details={"missing": list(missing_cols)},
+            ))
+            return QualityReport(passed=False, score=0, rows_checked=rows_checked, issues=issues)
+
+        # 2. Null check
+        null_counts = df[list(required_cols - {"ts_open"})].isnull().sum()
+        total_nulls = null_counts.sum()
+        if total_nulls > 0:
+            severity = "HIGH" if total_nulls > rows_checked * 0.1 else "MEDIUM"
+            issues.append(QualityIssue(
+                "schema", severity,
+                f"Null values found: {null_counts.to_dict()}",
+                affected_rows=int(null_counts.max()),
+            ))
+
+        # 3. Price relationship checks
+        price_issues = 0
+        if "high" in df.columns and "low" in df.columns:
+            # High must be >= Low
+            bad_hl = df[df["high"] < df["low"]]
+            if len(bad_hl) > 0:
+                price_issues += len(bad_hl)
                 issues.append(QualityIssue(
-                    severity="HIGH",
-                    issue_type="price_inversion",
-                    description=f"High ({bar.high}) < Low ({bar.low})",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
-                ))
-                bar_valid = False
-
-            if bar.open < Decimal("0") or bar.close < Decimal("0"):
-                issues.append(QualityIssue(
-                    severity="CRITICAL",
-                    issue_type="negative_price",
-                    description=f"Negative price: O={bar.open} C={bar.close}",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
-                ))
-                bar_valid = False
-
-            if bar.high < Decimal("0") or bar.low < Decimal("0"):
-                issues.append(QualityIssue(
-                    severity="CRITICAL",
-                    issue_type="negative_price",
-                    description=f"Negative H/L: H={bar.high} L={bar.low}",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
-                ))
-                bar_valid = False
-
-            # 2. Open/Close within H/L range
-            if bar.open > bar.high or bar.open < bar.low:
-                issues.append(QualityIssue(
-                    severity="MEDIUM",
-                    issue_type="open_out_of_range",
-                    description=f"Open ({bar.open}) outside H-L range [{bar.low}, {bar.high}]",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
+                    "price", "HIGH",
+                    f"{len(bad_hl)} bars where high < low",
+                    affected_rows=len(bad_hl),
                 ))
 
-            if bar.close > bar.high or bar.close < bar.low:
-                issues.append(QualityIssue(
-                    severity="MEDIUM",
-                    issue_type="close_out_of_range",
-                    description=f"Close ({bar.close}) outside H-L range [{bar.low}, {bar.high}]",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
-                ))
+        if "high" in df.columns and "open" in df.columns:
+            # High must be >= Open
+            bad_ho = df[df["high"] < df["open"]]
+            if len(bad_ho) > 0:
+                price_issues += len(bad_ho)
 
-            # 3. Volume check
-            if bar.volume < self._min_volume:
-                issues.append(QualityIssue(
-                    severity="LOW",
-                    issue_type="zero_volume",
-                    description=f"Zero or low volume: {bar.volume}",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
-                ))
+        if "high" in df.columns and "close" in df.columns:
+            # High must be >= Close
+            bad_hc = df[df["high"] < df["close"]]
+            if len(bad_hc) > 0:
+                price_issues += len(bad_hc)
 
-            # 4. Monotonic timestamp check
-            if prev_ts and bar.ts_open <= prev_ts:
-                issues.append(QualityIssue(
-                    severity="HIGH",
-                    issue_type="non_monotonic_timestamp",
-                    description=f"Timestamp {bar.ts_open} <= previous {prev_ts}",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
-                ))
-                bar_valid = False
+        if "low" in df.columns and "open" in df.columns:
+            # Low must be <= Open
+            bad_lo = df[df["low"] > df["open"]]
+            if len(bad_lo) > 0:
+                price_issues += len(bad_lo)
 
-            # 5. Extreme price change check
-            if prev_close and prev_close > Decimal("0"):
-                change_pct = abs((bar.close - prev_close) / prev_close * Decimal("100"))
-                if change_pct > Decimal(str(self._max_price_change)):
+        if "low" in df.columns and "close" in df.columns:
+            # Low must be <= Close
+            bad_lc = df[df["low"] > df["close"]]
+            if len(bad_lc) > 0:
+                price_issues += len(bad_lc)
+
+        if price_issues > 0:
+            issues.append(QualityIssue(
+                "price", "HIGH",
+                f"Total price relationship violations: {price_issues}",
+                affected_rows=price_issues,
+            ))
+
+        # 4. Negative prices
+        for col in ["open", "high", "low", "close"]:
+            if col in df.columns:
+                neg = (df[col] < 0).sum()
+                if neg > 0:
                     issues.append(QualityIssue(
-                        severity="MEDIUM",
-                        issue_type="extreme_price_change",
-                        description=f"Price change {change_pct:.1f}% exceeds {self._max_price_change}%",
-                        symbol=bar.symbol,
-                        timestamp=bar.ts_open,
+                        "price", "CRITICAL",
+                        f"{neg} negative values in {col}",
+                        affected_rows=int(neg),
                     ))
 
-            # 6. Staleness check
-            now = datetime.utcnow().replace(tzinfo=bar.ts_open.tzinfo) if bar.ts_open.tzinfo else datetime.utcnow()
-            if bar.ts_open < now - timedelta(days=self._max_staleness * 3):
+        # 5. Zero volume check
+        if "volume" in df.columns:
+            zero_vol = (df["volume"] == 0).sum()
+            if zero_vol > rows_checked * 0.5:
                 issues.append(QualityIssue(
-                    severity="LOW",
-                    issue_type="very_old_data",
-                    description=f"Data from {bar.ts_open.date()} is very old",
-                    symbol=bar.symbol,
-                    timestamp=bar.ts_open,
+                    "price", "MEDIUM",
+                    f"{zero_vol} bars with zero volume ({zero_vol/rows_checked*100:.0f}%)",
+                    affected_rows=int(zero_vol),
                 ))
 
-            if bar_valid:
-                valid += 1
-            else:
-                rejected += 1
+        # 6. Duplicate timestamps
+        if "ts_open" in df.columns:
+            dupes = df["ts_open"].duplicated().sum()
+            if dupes > 0:
+                issues.append(QualityIssue(
+                    "duplicate", "HIGH",
+                    f"{dupes} duplicate timestamps",
+                    affected_rows=int(dupes),
+                ))
 
-            prev_ts = bar.ts_open
-            prev_close = bar.close
+        # 7. Monotonic timestamps
+        if "ts_open" in df.columns and len(df) > 1:
+            ts = pd.to_datetime(df["ts_open"])
+            non_monotonic = (ts.diff() < timedelta(0)).sum()
+            if non_monotonic > 0:
+                issues.append(QualityIssue(
+                    "monotonic", "HIGH",
+                    f"{non_monotonic} non-monotonic timestamp transitions",
+                    affected_rows=int(non_monotonic),
+                ))
 
-        # Compute content hash
-        content_hash = self._compute_hash(bars)
+        # 8. Staleness check
+        if "ts_open" in df.columns and len(df) > 0:
+            latest = pd.to_datetime(df["ts_open"]).max()
+            age = datetime.utcnow() - latest.to_pydatetime()
+            if age > self.max_staleness:
+                issues.append(QualityIssue(
+                    "stale", "HIGH",
+                    f"Data is stale: latest bar is {age.days}d {age.seconds // 3600}h old",
+                    details={"latest": str(latest), "max_staleness_hours": self.max_staleness.total_seconds() / 3600},
+                ))
 
-        status = DataQualityStatus.VALIDATED
-        if rejected > 0:
-            reject_rate = rejected / len(bars) if bars else 0
-            if reject_rate > 0.1:
-                status = DataQualityStatus.REJECTED
-            else:
-                status = DataQualityStatus.VALIDATED
+        # 9. Gap detection (missing trading days)
+        if "ts_open" in df.columns and len(df) > 5:
+            ts = pd.to_datetime(df["ts_open"]).sort_values()
+            gaps = ts.diff()
+            median_gap = gaps.median()
+            large_gaps = gaps[gaps > median_gap * 3]
+            if len(large_gaps) > 0:
+                gap_ratio = len(large_gaps) / len(df)
+                if gap_ratio > self.max_gap_ratio:
+                    issues.append(QualityIssue(
+                        "missing", "MEDIUM",
+                        f"{len(large_gaps)} large gaps detected ({gap_ratio*100:.1f}% of bars)",
+                        affected_rows=len(large_gaps),
+                    ))
 
-        critical = [i for i in issues if i.severity == "CRITICAL"]
-        if critical:
-            status = DataQualityStatus.REJECTED
+        # 10. Extreme moves (>20% in a single bar)
+        if "close" in df.columns and "open" in df.columns and len(df) > 1:
+            pct_change = abs((df["close"] - df["open"]) / df["open"])
+            extreme = (pct_change > 0.20).sum()
+            if extreme > 0:
+                issues.append(QualityIssue(
+                    "price", "MEDIUM",
+                    f"{extreme} bars with >20% intraday move",
+                    affected_rows=int(extreme),
+                ))
 
-        return ValidationResult(
-            status=status,
-            total_records=len(bars),
-            valid_records=valid,
-            rejected_records=rejected,
+        # Calculate score
+        rows_failed = sum(i.affected_rows for i in issues)
+        rows_passed = rows_checked - rows_failed
+        score = rows_passed / rows_checked if rows_checked > 0 else 0
+
+        # Determine pass/fail
+        critical = any(i.severity == "CRITICAL" for i in issues)
+        high_count = sum(1 for i in issues if i.severity == "HIGH")
+        passed = not critical and high_count <= 1 and score >= self.min_completeness
+
+        return QualityReport(
+            passed=passed,
+            score=round(score, 4),
             issues=issues,
-            content_hash=content_hash,
+            rows_checked=rows_checked,
+            rows_passed=rows_passed,
+            rows_failed=rows_failed,
         )
 
-    def validate_instruments(self, instruments: list[InstrumentRecord]) -> ValidationResult:
+    def validate_instruments(self, df: pd.DataFrame) -> QualityReport:
         """Validate instrument metadata."""
-        issues: list[QualityIssue] = []
-        valid = 0
-        rejected = 0
+        issues = []
+        rows_checked = len(df)
 
-        seen_symbols = set()
-        for inst in instruments:
-            inst_valid = True
+        if rows_checked == 0:
+            return QualityReport(passed=True, score=1.0, rows_checked=0)
 
-            if not inst.symbol:
-                issues.append(QualityIssue(
-                    severity="CRITICAL",
-                    issue_type="missing_symbol",
-                    description="Instrument has no symbol",
-                ))
-                inst_valid = False
-
-            if not inst.name:
-                issues.append(QualityIssue(
-                    severity="MEDIUM",
-                    issue_type="missing_name",
-                    description=f"Instrument {inst.symbol} has no name",
-                    symbol=inst.symbol,
-                ))
-
-            if inst.symbol in seen_symbols:
-                issues.append(QualityIssue(
-                    severity="HIGH",
-                    issue_type="duplicate_symbol",
-                    description=f"Duplicate symbol: {inst.symbol}",
-                    symbol=inst.symbol,
-                ))
-                inst_valid = False
-            seen_symbols.add(inst.symbol)
-
-            if inst_valid:
-                valid += 1
+        # Check required fields
+        for col in ["symbol", "name", "type"]:
+            if col not in df.columns:
+                issues.append(QualityIssue("schema", "CRITICAL", f"Missing column: {col}"))
             else:
-                rejected += 1
+                nulls = df[col].isnull().sum()
+                if nulls > 0:
+                    issues.append(QualityIssue("schema", "HIGH", f"{nulls} null {col} values", affected_rows=int(nulls)))
 
-        return ValidationResult(
-            status=DataQualityStatus.REJECTED if rejected > 0 else DataQualityStatus.VALIDATED,
-            total_records=len(instruments),
-            valid_records=valid,
-            rejected_records=rejected,
+        # Duplicate symbols
+        if "symbol" in df.columns:
+            dupes = df["symbol"].duplicated().sum()
+            if dupes > 0:
+                issues.append(QualityIssue("duplicate", "HIGH", f"{dupes} duplicate symbols", affected_rows=int(dupes)))
+
+        rows_failed = sum(i.affected_rows for i in issues)
+        score = (rows_checked - rows_failed) / rows_checked if rows_checked > 0 else 1.0
+
+        return QualityReport(
+            passed=not any(i.severity == "CRITICAL" for i in issues),
+            score=round(score, 4),
             issues=issues,
+            rows_checked=rows_checked,
+            rows_passed=rows_checked - rows_failed,
+            rows_failed=rows_failed,
         )
-
-    def _compute_hash(self, bars: list[Bar]) -> str:
-        """Compute a deterministic hash of the bar data."""
-        content = "|".join(
-            f"{b.symbol},{b.ts_open.isoformat()},{b.open},{b.high},{b.low},{b.close},{b.volume}"
-            for b in sorted(bars, key=lambda x: (x.symbol, x.ts_open))
-        )
-        return hashlib.sha256(content.encode()).hexdigest()

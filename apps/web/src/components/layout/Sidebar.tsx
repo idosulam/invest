@@ -13,6 +13,7 @@ import {
   Settings,
   Bell,
   Activity,
+  Server,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/backtests", label: "Backtests", icon: FlaskConical },
   { href: "/portfolios", label: "Portfolios", icon: Briefcase },
   { href: "/alerts", label: "Alerts", icon: Bell },
+  { href: "/operations", label: "Operations", icon: Server },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
