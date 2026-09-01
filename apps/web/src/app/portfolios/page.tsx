@@ -84,8 +84,11 @@ export default function PortfoliosPage() {
         setPortfolios(data);
         if (data.length > 0) setSelectedId(data[0].id);
       }
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchPositions = async (id: string) => {
@@ -95,7 +98,9 @@ export default function PortfoliosPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setPositions(await res.json());
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchAnalytics = async (id: string) => {
@@ -105,7 +110,9 @@ export default function PortfoliosPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setAnalytics(await res.json());
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const createPortfolio = async () => {
@@ -114,7 +121,10 @@ export default function PortfoliosPage() {
       const token = localStorage.getItem("token");
       const res = await fetch("/api/v1/portfolios", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ name: newName.trim() }),
       });
       if (res.ok) {
@@ -122,7 +132,9 @@ export default function PortfoliosPage() {
         setShowCreate(false);
         fetchPortfolios();
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const selectedPortfolio = portfolios.find((p) => p.id === selectedId);
@@ -154,8 +166,21 @@ export default function PortfoliosPage() {
               className="flex-1 text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               autoFocus
             />
-            <button onClick={createPortfolio} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700">Create</button>
-            <button onClick={() => { setShowCreate(false); setNewName(""); }} className="p-2 text-surface-700 hover:text-surface-900"><X className="w-4 h-4" /></button>
+            <button
+              onClick={createPortfolio}
+              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => {
+                setShowCreate(false);
+                setNewName("");
+              }}
+              className="p-2 text-surface-700 hover:text-surface-900"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </Card>
       )}
@@ -172,9 +197,13 @@ export default function PortfoliosPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-surface-700">{p.type}</p>
-                  <p className="text-lg font-bold text-surface-900 mt-1">{p.name}</p>
+                  <p className="text-lg font-bold text-surface-900 mt-1">
+                    {p.name}
+                  </p>
                 </div>
-                <span className="px-2 py-0.5 text-xs bg-amber-50 text-warning-600 rounded-full">{p.type}</span>
+                <span className="px-2 py-0.5 text-xs bg-amber-50 text-warning-600 rounded-full">
+                  {p.type}
+                </span>
               </div>
             </Card>
           ))}
@@ -185,42 +214,88 @@ export default function PortfoliosPage() {
         {/* Positions */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Positions {selectedPortfolio ? `— ${selectedPortfolio.name}` : ""}</CardTitle>
+            <CardTitle>
+              Positions {selectedPortfolio ? `— ${selectedPortfolio.name}` : ""}
+            </CardTitle>
           </CardHeader>
 
           {loading ? (
-            <div className="h-48 flex items-center justify-center text-surface-700"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading...</div>
+            <div className="h-48 flex items-center justify-center text-surface-700">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading...
+            </div>
           ) : positions.length === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-surface-700">
               <Briefcase className="w-10 h-10 mb-2 text-surface-200" />
               <p>No positions yet</p>
-              <p className="text-sm text-surface-200 mt-1">Execute paper trades via the API</p>
+              <p className="text-sm text-surface-200 mt-1">
+                Execute paper trades via the API
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-200">
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Symbol</th>
-                    <th className="text-right py-2 px-3 font-medium text-surface-700">Qty</th>
-                    <th className="text-right py-2 px-3 font-medium text-surface-700">Avg Cost</th>
-                    <th className="text-right py-2 px-3 font-medium text-surface-700">Current</th>
-                    <th className="text-right py-2 px-3 font-medium text-surface-700">P&L</th>
-                    <th className="text-right py-2 px-3 font-medium text-surface-700">P&L %</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Symbol
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-surface-700">
+                      Qty
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-surface-700">
+                      Avg Cost
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-surface-700">
+                      Current
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-surface-700">
+                      P&L
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-surface-700">
+                      P&L %
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {positions.map((pos) => (
-                    <tr key={pos.id} className="border-b border-surface-100 hover:bg-surface-50">
+                    <tr
+                      key={pos.id}
+                      className="border-b border-surface-100 hover:bg-surface-50"
+                    >
                       <td className="py-2.5 px-3">
-                        <Link href={`/instruments/${pos.instrument_id}`} className="font-semibold text-primary-600 hover:text-primary-700">{pos.symbol ?? "?"}</Link>
-                        <span className="ml-2 text-surface-700">{pos.instrument_name}</span>
+                        <Link
+                          href={`/instruments/${pos.instrument_id}`}
+                          className="font-semibold text-primary-600 hover:text-primary-700"
+                        >
+                          {pos.symbol ?? "?"}
+                        </Link>
+                        <span className="ml-2 text-surface-700">
+                          {pos.instrument_name}
+                        </span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono">{pos.quantity}</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{format.currency(pos.avg_cost)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{pos.current_price ? format.currency(pos.current_price) : "—"}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono font-medium ${format.changeColor(pos.unrealized_pnl)}`}>{format.currency(pos.unrealized_pnl)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${format.changeColor(pos.unrealized_pnl_pct ?? 0)}`}>{pos.unrealized_pnl_pct !== null ? format.pct(pos.unrealized_pnl_pct) : "—"}</td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        {pos.quantity}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        {format.currency(pos.avg_cost)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        {pos.current_price
+                          ? format.currency(pos.current_price)
+                          : "—"}
+                      </td>
+                      <td
+                        className={`py-2.5 px-3 text-right font-mono font-medium ${format.changeColor(pos.unrealized_pnl)}`}
+                      >
+                        {format.currency(pos.unrealized_pnl)}
+                      </td>
+                      <td
+                        className={`py-2.5 px-3 text-right font-mono ${format.changeColor(pos.unrealized_pnl_pct ?? 0)}`}
+                      >
+                        {pos.unrealized_pnl_pct !== null
+                          ? format.pct(pos.unrealized_pnl_pct)
+                          : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -234,42 +309,64 @@ export default function PortfoliosPage() {
           {analytics && (
             <>
               <Card>
-                <CardHeader><CardTitle>Summary</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Summary</CardTitle>
+                </CardHeader>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-surface-700">Total Value</span>
-                    <span className="font-medium text-surface-900">{format.currency(analytics.total_value)}</span>
+                    <span className="font-medium text-surface-900">
+                      {format.currency(analytics.total_value)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-surface-700">Total Cost</span>
-                    <span className="text-surface-900">{format.currency(analytics.total_cost)}</span>
+                    <span className="text-surface-900">
+                      {format.currency(analytics.total_cost)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-surface-700">Total P&L</span>
-                    <span className={`font-medium ${format.changeColor(analytics.total_pnl)}`}>{format.currency(analytics.total_pnl)} ({format.pct(analytics.total_pnl_pct)})</span>
+                    <span
+                      className={`font-medium ${format.changeColor(analytics.total_pnl)}`}
+                    >
+                      {format.currency(analytics.total_pnl)} (
+                      {format.pct(analytics.total_pnl_pct)})
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-surface-700">Positions</span>
-                    <span className="text-surface-900">{analytics.position_count}</span>
+                    <span className="text-surface-900">
+                      {analytics.position_count}
+                    </span>
                   </div>
                 </div>
               </Card>
 
               {Object.keys(analytics.sector_allocation).length > 0 && (
                 <Card>
-                  <CardHeader><CardTitle>Sector Allocation</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>Sector Allocation</CardTitle>
+                  </CardHeader>
                   <div className="space-y-3">
-                    {Object.entries(analytics.sector_allocation).sort((a, b) => b[1] - a[1]).map(([sector, pct]) => (
-                      <div key={sector}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-surface-900">{sector}</span>
-                          <span className="text-surface-700">{pct}%</span>
+                    {Object.entries(analytics.sector_allocation)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([sector, pct]) => (
+                        <div key={sector}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="font-medium text-surface-900">
+                              {sector}
+                            </span>
+                            <span className="text-surface-700">{pct}%</span>
+                          </div>
+                          <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary-500 rounded-full"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-primary-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </Card>
               )}

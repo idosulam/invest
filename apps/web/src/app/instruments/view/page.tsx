@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -39,23 +39,30 @@ const INDICATOR_PRESETS = [
 ];
 
 export default function InstrumentWorkspacePage() {
-  const params = useParams();
-  const instrumentId = params.id as string;
+  const searchParams = useSearchParams();
+  const instrumentId = searchParams.get("id") as string;
 
   const [timeframe, setTimeframe] = useState("1D");
-  const [selectedIndicators, setSelectedIndicators] = useState<string[]>(["sma_20", "sma_50"]);
+  const [selectedIndicators, setSelectedIndicators] = useState<string[]>([
+    "sma_20",
+    "sma_50",
+  ]);
   const [limit, setLimit] = useState(200);
 
-  const { data: instrument, isLoading: loadingInstrument } = useInstrument(instrumentId);
-  const { data: chartData, isLoading: loadingChart } = useChartData(instrumentId, {
-    timeframe,
-    indicators: selectedIndicators.join(","),
-    limit,
-  });
+  const { data: instrument, isLoading: loadingInstrument } =
+    useInstrument(instrumentId);
+  const { data: chartData, isLoading: loadingChart } = useChartData(
+    instrumentId,
+    {
+      timeframe,
+      indicators: selectedIndicators.join(","),
+      limit,
+    },
+  );
 
   const toggleIndicator = (name: string) => {
     setSelectedIndicators((prev) =>
-      prev.includes(name) ? prev.filter((i) => i !== name) : [...prev, name]
+      prev.includes(name) ? prev.filter((i) => i !== name) : [...prev, name],
     );
   };
 
@@ -65,17 +72,26 @@ export default function InstrumentWorkspacePage() {
 
   const lastBar = chartData?.bars?.[chartData.bars.length - 1];
   const prevBar = chartData?.bars?.[chartData.bars.length - 2];
-  const change = lastBar && prevBar ? ((lastBar.close - prevBar.close) / prevBar.close) * 100 : null;
+  const change =
+    lastBar && prevBar
+      ? ((lastBar.close - prevBar.close) / prevBar.close) * 100
+      : null;
 
   return (
     <div>
       {/* ── Breadcrumb ── */}
       <div className="flex items-center gap-2 mb-4">
-        <Link href="/instruments" className="text-surface-700 hover:text-surface-900">
+        <Link
+          href="/instruments"
+          className="text-surface-700 hover:text-surface-900"
+        >
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <span className="text-surface-200">/</span>
-        <Link href="/instruments" className="text-sm text-surface-700 hover:text-surface-900">
+        <Link
+          href="/instruments"
+          className="text-sm text-surface-700 hover:text-surface-900"
+        >
           Instruments
         </Link>
         <span className="text-surface-200">/</span>
@@ -106,7 +122,9 @@ export default function InstrumentWorkspacePage() {
           }
         />
       ) : (
-        <div className="text-center py-12 text-surface-700">Instrument not found</div>
+        <div className="text-center py-12 text-surface-700">
+          Instrument not found
+        </div>
       )}
 
       {/* ── Price Summary ── */}
@@ -114,7 +132,9 @@ export default function InstrumentWorkspacePage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <Card padding="sm">
             <p className="text-xs text-surface-700 mb-1">Last Price</p>
-            <p className="text-xl font-bold text-surface-900">{format.currency(lastBar.close)}</p>
+            <p className="text-xl font-bold text-surface-900">
+              {format.currency(lastBar.close)}
+            </p>
             {change !== null && (
               <p className={`text-sm ${format.changeColor(change)}`}>
                 {format.pct(change)}
@@ -123,19 +143,27 @@ export default function InstrumentWorkspacePage() {
           </Card>
           <Card padding="sm">
             <p className="text-xs text-surface-700 mb-1">Open</p>
-            <p className="text-lg font-semibold text-surface-900">{format.currency(lastBar.open)}</p>
+            <p className="text-lg font-semibold text-surface-900">
+              {format.currency(lastBar.open)}
+            </p>
           </Card>
           <Card padding="sm">
             <p className="text-xs text-surface-700 mb-1">High</p>
-            <p className="text-lg font-semibold text-success-500">{format.currency(lastBar.high)}</p>
+            <p className="text-lg font-semibold text-success-500">
+              {format.currency(lastBar.high)}
+            </p>
           </Card>
           <Card padding="sm">
             <p className="text-xs text-surface-700 mb-1">Low</p>
-            <p className="text-lg font-semibold text-danger-500">{format.currency(lastBar.low)}</p>
+            <p className="text-lg font-semibold text-danger-500">
+              {format.currency(lastBar.low)}
+            </p>
           </Card>
           <Card padding="sm">
             <p className="text-xs text-surface-700 mb-1">Volume</p>
-            <p className="text-lg font-semibold text-surface-900">{format.compact(lastBar.volume)}</p>
+            <p className="text-lg font-semibold text-surface-900">
+              {format.compact(lastBar.volume)}
+            </p>
           </Card>
         </div>
       )}
@@ -213,7 +241,8 @@ export default function InstrumentWorkspacePage() {
             </CardHeader>
             <div className="space-y-1.5">
               {INDICATOR_PRESETS.map((preset) => {
-                const isActive = selectedIndicators.join(",") === preset.indicators;
+                const isActive =
+                  selectedIndicators.join(",") === preset.indicators;
                 return (
                   <button
                     key={preset.name}
@@ -238,9 +267,18 @@ export default function InstrumentWorkspacePage() {
             </CardHeader>
             <div className="space-y-1">
               {[
-                "sma_20", "sma_50", "sma_200", "ema_12", "ema_26",
-                "rsi_14", "macd", "bollinger", "atr_14", "adx_14",
-                "obv", "vwap_20",
+                "sma_20",
+                "sma_50",
+                "sma_200",
+                "ema_12",
+                "ema_26",
+                "rsi_14",
+                "macd",
+                "bollinger",
+                "atr_14",
+                "adx_14",
+                "obv",
+                "vwap_20",
               ].map((name) => (
                 <label
                   key={name}
@@ -252,7 +290,9 @@ export default function InstrumentWorkspacePage() {
                     onChange={() => toggleIndicator(name)}
                     className="rounded border-surface-200 text-primary-600 focus:ring-primary-500"
                   />
-                  <span className="text-sm text-surface-900 font-mono">{name}</span>
+                  <span className="text-sm text-surface-900 font-mono">
+                    {name}
+                  </span>
                 </label>
               ))}
             </div>
@@ -268,29 +308,39 @@ export default function InstrumentWorkspacePage() {
                 {instrument.sector && (
                   <div className="flex justify-between">
                     <span className="text-surface-700">Sector</span>
-                    <span className="text-surface-900">{instrument.sector}</span>
+                    <span className="text-surface-900">
+                      {instrument.sector}
+                    </span>
                   </div>
                 )}
                 {instrument.industry && (
                   <div className="flex justify-between">
                     <span className="text-surface-700">Industry</span>
-                    <span className="text-surface-900">{instrument.industry}</span>
+                    <span className="text-surface-900">
+                      {instrument.industry}
+                    </span>
                   </div>
                 )}
                 {instrument.country && (
                   <div className="flex justify-between">
                     <span className="text-surface-700">Country</span>
-                    <span className="text-surface-900">{instrument.country}</span>
+                    <span className="text-surface-900">
+                      {instrument.country}
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-surface-700">Currency</span>
-                  <span className="text-surface-900">{instrument.currency}</span>
+                  <span className="text-surface-900">
+                    {instrument.currency}
+                  </span>
                 </div>
                 {instrument.isin && (
                   <div className="flex justify-between">
                     <span className="text-surface-700">ISIN</span>
-                    <span className="text-surface-900 font-mono text-xs">{instrument.isin}</span>
+                    <span className="text-surface-900 font-mono text-xs">
+                      {instrument.isin}
+                    </span>
                   </div>
                 )}
               </div>

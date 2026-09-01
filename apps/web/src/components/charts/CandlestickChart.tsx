@@ -52,7 +52,7 @@ function prepareData(bars: BarPoint[]): ChartDataPoint[] {
 
 function mergeIndicators(
   data: ChartDataPoint[],
-  indicators: IndicatorData
+  indicators: IndicatorData,
 ): Record<string, any>[] {
   return data.map((point, i) => {
     const row: Record<string, any> = { ...point };
@@ -120,10 +120,19 @@ export function CandlestickChart({
 
   // Separate overlay indicators (on price chart) from sub-chart indicators
   const overlayKeys = indicatorKeys.filter(
-    (k) => !["rsi_14", "atr_14", "adx_14", "obv", "macd_macd", "macd_signal", "macd_histogram"].includes(k)
+    (k) =>
+      ![
+        "rsi_14",
+        "atr_14",
+        "adx_14",
+        "obv",
+        "macd_macd",
+        "macd_signal",
+        "macd_histogram",
+      ].includes(k),
   );
   const subChartKeys = indicatorKeys.filter((k) =>
-    ["rsi_14", "atr_14", "adx_14", "obv"].includes(k)
+    ["rsi_14", "atr_14", "adx_14", "obv"].includes(k),
   );
   const hasMACD = indicatorKeys.some((k) => k.startsWith("macd_"));
 
@@ -138,7 +147,10 @@ export function CandlestickChart({
     <div className="space-y-2">
       {/* Main price chart */}
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+        <ComposedChart
+          data={chartData}
+          margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis
             dataKey="ts"
@@ -153,27 +165,14 @@ export function CandlestickChart({
             stroke="#cbd5e1"
             width={70}
           />
-          <Tooltip
-            content={<ChartTooltip />}
-            labelFormatter={formatDate}
-          />
+          <Tooltip content={<ChartTooltip />} labelFormatter={formatDate} />
           <Legend />
 
           {/* Candlestick bodies as bars */}
-          <Bar
-            dataKey="bodyBottom"
-            fill="transparent"
-            stroke="transparent"
-            legendHidden
-          />
+          <Bar dataKey="bodyBottom" fill="transparent" stroke="transparent" />
 
           {/* High-Low range as area (simulates wicks) */}
-          <Area
-            dataKey="high"
-            fill="none"
-            stroke="transparent"
-            legendHidden
-          />
+          <Area dataKey="high" fill="none" stroke="transparent" />
 
           {/* Close line as the main price visualization */}
           <Line
@@ -204,9 +203,21 @@ export function CandlestickChart({
       {/* Volume chart */}
       {showVolume && (
         <ResponsiveContainer width="100%" height={80}>
-          <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 5 }}>
-            <XAxis dataKey="ts" tickFormatter={formatDate} tick={{ fontSize: 10, fill: "#94a3b8" }} stroke="#e2e8f0" />
-            <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} stroke="#e2e8f0" width={70} />
+          <ComposedChart
+            data={chartData}
+            margin={{ top: 0, right: 5, left: 5, bottom: 5 }}
+          >
+            <XAxis
+              dataKey="ts"
+              tickFormatter={formatDate}
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              stroke="#e2e8f0"
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              stroke="#e2e8f0"
+              width={70}
+            />
             <Bar dataKey="volume" fill="#94a3b8" opacity={0.5} name="Volume" />
           </ComposedChart>
         </ResponsiveContainer>
@@ -215,11 +226,25 @@ export function CandlestickChart({
       {/* Sub-chart indicators (RSI, ATR, ADX) */}
       {subChartKeys.map((key) => (
         <div key={key}>
-          <p className="text-xs font-medium text-surface-700 mb-1 uppercase">{key.replace("_", " ")}</p>
+          <p className="text-xs font-medium text-surface-700 mb-1 uppercase">
+            {key.replace("_", " ")}
+          </p>
           <ResponsiveContainer width="100%" height={80}>
-            <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 5 }}>
-              <XAxis dataKey="ts" tickFormatter={formatDate} tick={{ fontSize: 10, fill: "#94a3b8" }} stroke="#e2e8f0" />
-              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} stroke="#e2e8f0" width={70} />
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 0, right: 5, left: 5, bottom: 5 }}
+            >
+              <XAxis
+                dataKey="ts"
+                tickFormatter={formatDate}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                stroke="#e2e8f0"
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                stroke="#e2e8f0"
+                width={70}
+              />
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <Line
                 type="monotone"
@@ -237,19 +262,52 @@ export function CandlestickChart({
       {/* MACD sub-chart */}
       {hasMACD && (
         <div>
-          <p className="text-xs font-medium text-surface-700 mb-1 uppercase">MACD</p>
+          <p className="text-xs font-medium text-surface-700 mb-1 uppercase">
+            MACD
+          </p>
           <ResponsiveContainer width="100%" height={100}>
-            <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 5 }}>
-              <XAxis dataKey="ts" tickFormatter={formatDate} tick={{ fontSize: 10, fill: "#94a3b8" }} stroke="#e2e8f0" />
-              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} stroke="#e2e8f0" width={70} />
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 0, right: 5, left: 5, bottom: 5 }}
+            >
+              <XAxis
+                dataKey="ts"
+                tickFormatter={formatDate}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                stroke="#e2e8f0"
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                stroke="#e2e8f0"
+                width={70}
+              />
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <Line type="monotone" dataKey="macd_macd" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="MACD" />
-              <Line type="monotone" dataKey="macd_signal" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Signal" />
-              <Bar dataKey="macd_histogram" fill="#22c55e" opacity={0.6} name="Histogram" />
+              <Line
+                type="monotone"
+                dataKey="macd_macd"
+                stroke="#3b82f6"
+                strokeWidth={1.5}
+                dot={false}
+                name="MACD"
+              />
+              <Line
+                type="monotone"
+                dataKey="macd_signal"
+                stroke="#ef4444"
+                strokeWidth={1.5}
+                dot={false}
+                name="Signal"
+              />
+              <Bar
+                dataKey="macd_histogram"
+                fill="#22c55e"
+                opacity={0.6}
+                name="Histogram"
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -273,9 +331,13 @@ function ChartTooltip({ active, payload, label }: any) {
         <span className="text-surface-200">Low</span>
         <span className="text-right font-mono">{data.low?.toFixed(2)}</span>
         <span className="text-surface-200">Close</span>
-        <span className="text-right font-mono font-medium">{data.close?.toFixed(2)}</span>
+        <span className="text-right font-mono font-medium">
+          {data.close?.toFixed(2)}
+        </span>
         <span className="text-surface-200">Volume</span>
-        <span className="text-right font-mono">{format.compact(data.volume)}</span>
+        <span className="text-right font-mono">
+          {format.compact(data.volume)}
+        </span>
       </div>
     </div>
   );

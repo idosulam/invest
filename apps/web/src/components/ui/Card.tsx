@@ -5,6 +5,7 @@ interface CardProps {
   children: ReactNode;
   className?: string;
   padding?: "sm" | "md" | "lg";
+  onClick?: () => void;
 }
 
 export function Card({ children, className, padding = "md" }: CardProps) {
@@ -14,7 +15,7 @@ export function Card({ children, className, padding = "md" }: CardProps) {
       className={clsx(
         "bg-white rounded-xl border border-surface-200 shadow-sm",
         paddings[padding],
-        className
+        className,
       )}
     >
       {children}
@@ -22,7 +23,13 @@ export function Card({ children, className, padding = "md" }: CardProps) {
   );
 }
 
-export function CardHeader({ children, className }: { children: ReactNode; className?: string }) {
+export function CardHeader({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div className={clsx("flex items-center justify-between mb-4", className)}>
       {children}
