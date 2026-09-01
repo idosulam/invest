@@ -231,7 +231,7 @@ export default function InstrumentsPage() {
                     >
                       <td className="py-2.5 px-3">
                         <Link
-                          href={`/instruments/${inst.id}`}
+                          href={`/instruments/view?id=${inst.id}`}
                           className="font-semibold text-primary-600 hover:text-primary-700"
                         >
                           {inst.symbol}
@@ -265,7 +265,7 @@ export default function InstrumentsPage() {
                       </td>
                       <td className="py-2.5 px-3 text-right">
                         <Link
-                          href={`/instruments/${inst.id}`}
+                          href={`/instruments/view?id=${inst.id}`}
                           className="text-primary-600 hover:text-primary-700 text-xs font-medium"
                         >
                           Open →

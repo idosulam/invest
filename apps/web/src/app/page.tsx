@@ -150,7 +150,7 @@ export default function DashboardPage() {
                     >
                       <td className="py-2.5 px-2">
                         <Link
-                          href={`/instruments/${inst.id}`}
+                          href={`/instruments/view?id=${inst.id}`}
                           className="font-semibold text-primary-600 hover:text-primary-700"
                         >
                           {inst.symbol}
@@ -178,7 +178,7 @@ export default function DashboardPage() {
                       </td>
                       <td className="py-2.5 px-2 text-right">
                         <Link
-                          href={`/instruments/${inst.id}`}
+                          href={`/instruments/view?id=${inst.id}`}
                           className="text-primary-600 hover:text-primary-700 text-xs font-medium"
                         >
                           Chart →

@@ -262,7 +262,7 @@ export default function WatchlistsPage() {
                         <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Link
-                              href={`/instruments/${inst.id}`}
+                              href={`/instruments/view?id=${inst.id}`}
                               className="text-primary-600 hover:text-primary-700 text-xs font-medium"
                             >
                               Chart →

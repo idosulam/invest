@@ -35,7 +35,7 @@ from packages.data.providers.base import MarketDataProvider, BarsRequest
 class IngestionResult:
     """Result of an ingestion run."""
     job_name: str
-    status: str = "PENDING"  # SUCCESS, PARTIAL, FAILED
+    status: str  # SUCCESS, PARTIAL, FAILED
     rows_processed: int = 0
     rows_inserted: int = 0
     rows_updated: int = 0

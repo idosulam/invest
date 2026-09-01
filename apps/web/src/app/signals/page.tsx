@@ -111,7 +111,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
           <div>
             <div className="flex items-center gap-2">
               <Link
-                href={`/instruments/${signal.instrument_id}`}
+                href={`/instruments/view?id=${signal.instrument_id}`}
                 className="text-lg font-bold text-surface-900 hover:text-primary-600"
                 onClick={(e) => e.stopPropagation()}
               >

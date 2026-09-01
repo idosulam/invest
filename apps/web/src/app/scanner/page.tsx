@@ -515,7 +515,7 @@ export default function ScannerPage() {
                       >
                         <td className="py-2 px-2">
                           <Link
-                            href={`/instruments/${r.instrument_id}`}
+                            href={`/instruments/view?id=${r.instrument_id}`}
                             className="font-semibold text-primary-600 hover:text-primary-700"
                           >
                             {r.symbol}
@@ -586,7 +586,7 @@ export default function ScannerPage() {
                         </td>
                         <td className="py-2 px-2 text-right">
                           <Link
-                            href={`/instruments/${r.instrument_id}`}
+                            href={`/instruments/view?id=${r.instrument_id}`}
                             className="text-primary-600 hover:text-primary-700 text-xs font-medium"
                           >
                             Chart →

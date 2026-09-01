@@ -264,7 +264,7 @@ export default function PortfoliosPage() {
                     >
                       <td className="py-2.5 px-3">
                         <Link
-                          href={`/instruments/${pos.instrument_id}`}
+                          href={`/instruments/view?id=${pos.instrument_id}`}
                           className="font-semibold text-primary-600 hover:text-primary-700"
                         >
                           {pos.symbol ?? "?"}

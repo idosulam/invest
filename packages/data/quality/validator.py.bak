@@ -11,7 +11,7 @@ Validates data at each stage of the ingestion pipeline:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -189,12 +189,7 @@ class DataQualityValidator:
         # 8. Staleness check
         if "ts_open" in df.columns and len(df) > 0:
             latest = pd.to_datetime(df["ts_open"]).max()
-            latest_dt = latest.to_pydatetime()
-            if latest_dt.tzinfo is not None:
-                now = datetime.now(timezone.utc)
-            else:
-                now = datetime.utcnow()
-            age = now - latest_dt
+            age = datetime.utcnow() - latest.to_pydatetime()
             if age > self.max_staleness:
                 issues.append(QualityIssue(
                     "stale", "HIGH",
