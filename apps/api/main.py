@@ -8,7 +8,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from apps.api.config import get_settings
 from apps.api.database import close_db, init_db
-from apps.api.routers import auth, charts, health, instruments, scanner, signals, watchlists
+from apps.api.routers import auth, backtests, charts, health, instruments, scanner, signals, watchlists
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -78,6 +78,7 @@ app.include_router(watchlists.router, prefix="/api/v1")
 app.include_router(charts.router, prefix="/api/v1")
 app.include_router(scanner.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
+app.include_router(backtests.router, prefix="/api/v1")
 
 
 # ── Root ────────────────────────────────────────────────────
