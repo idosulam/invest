@@ -91,6 +91,16 @@ export const charts = {
   listIndicators: () => request<string[]>("/charts/indicators"),
 };
 
+/* ── Scanner ── */
+
+export const scanner = {
+  run: (filters: Record<string, any>, sortBy = "symbol", sortDir = "asc", limit = 200) =>
+    request<any>(`/scanner/run?sort_by=${sortBy}&sort_dir=${sortDir}&limit=${limit}`, {
+      method: "POST",
+      body: JSON.stringify(filters),
+    }),
+};
+
 /* ── Watchlists ── */
 
 export const watchlists = {
