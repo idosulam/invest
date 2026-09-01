@@ -12,12 +12,14 @@ import {
   Briefcase,
   Settings,
   Bell,
+  Activity,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/instruments", label: "Instruments", icon: LineChart },
   { href: "/watchlists", label: "Watchlists", icon: ListOrdered },
+  { href: "/signals", label: "Signals", icon: Activity },
   { href: "/scanner", label: "Scanner", icon: ScanLine },
   { href: "/backtests", label: "Backtests", icon: FlaskConical },
   { href: "/portfolios", label: "Portfolios", icon: Briefcase },
