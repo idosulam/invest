@@ -1,3 +1,14 @@
+FROM node:20-slim AS frontend
+
+WORKDIR /build
+
+# Build Next.js frontend
+COPY apps/web/package.json apps/web/package-lock.json* apps/web/
+RUN cd apps/web && npm install --prefer-offline
+COPY apps/web/ apps/web/
+RUN cd apps/web && npm run build
+
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -14,6 +25,9 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir .
 
 COPY . .
+
+# Copy built frontend from builder stage
+COPY --from=frontend /build/apps/web/out apps/web/out
 
 EXPOSE 8000
 
