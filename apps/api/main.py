@@ -1,9 +1,12 @@
 """FastAPI application entry point."""
 
+import os
 import structlog
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from apps.api.config import get_settings
@@ -88,11 +91,34 @@ app.include_router(admin.router, prefix="/api/v1")
 
 # ── Root ────────────────────────────────────────────────────
 
+# ── Frontend static files ───────────────────────────────────
+
+# Serve Next.js static files if they exist
+NEXTJS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "apps", "web", "out")
+NEXTJS_EXISTS = os.path.isdir(NEXTJS_DIR)
+
+if NEXTJS_EXISTS:
+    app.mount("/_next", StaticFiles(directory=os.path.join(NEXTJS_DIR, "_next")), name="nextjs_static")
+
 @app.get("/")
 async def root():
+    if NEXTJS_EXISTS:
+        return FileResponse(os.path.join(NEXTJS_DIR, "index.html"))
     return {
         "name": "Market Platform API",
         "version": "0.1.0",
         "docs": "/docs",
         "health": "/health/live",
     }
+
+# Catch-all for frontend routes (SPA)
+@app.get("/{path:path}")
+async def serve_frontend(path: str):
+    if NEXTJS_EXISTS:
+        # Try exact file first
+        file_path = os.path.join(NEXTJS_DIR, path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        # Fall back to index.html for SPA routing
+        return FileResponse(os.path.join(NEXTJS_DIR, "index.html"))
+    return {"error": "Frontend not built. Run: cd apps/web && npm run build"}
