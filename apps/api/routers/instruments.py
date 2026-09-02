@@ -13,6 +13,9 @@ from apps.api.auth import get_current_user, require_analyst
 from apps.api.database import get_db
 from packages.domain.entities.models import Instrument, User
 from packages.domain.enums.common import InstrumentType, InstrumentStatus
+from packages.data.providers.yahoo_finance import YahooFinanceProvider
+from packages.data.ingestion.pipeline import IngestionPipeline
+from packages.domain.enums.common import Timeframe
 
 router = APIRouter(prefix="/instruments", tags=["instruments"])
 
@@ -137,4 +140,17 @@ async def create_instrument(
     db.add(instrument)
     await db.flush()
     await db.refresh(instrument)
+
+    # Auto-ingest historical bars for the new instrument (best-effort;
+    # failures here shouldn't block instrument creation).
+    try:
+        provider = YahooFinanceProvider()
+        pipeline = IngestionPipeline(provider)
+        await pipeline.ingest_bars(db, [instrument.symbol], Timeframe("1D"))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Auto-ingestion failed for {instrument.symbol}: {exc}"
+        )
+
     return instrument
