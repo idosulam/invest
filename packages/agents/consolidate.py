@@ -233,19 +233,25 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
         "SUMMARY: <2-3 sentences explaining the final call in plain language, "
         "referencing where the technical strategies, the debate, and the "
         "analyst consensus agreed or disagreed>\n"
-        "ENTRY_ZONE: <ALWAYS give concrete guidance, even if FINAL_STATE is not "
-        "ENTER_LONG. If bullish: the specific price zone to buy at. If not "
-        "bullish: the specific price level, pullback, or condition that would "
-        "need to happen before entry becomes attractive. Never say Not applicable.>\n"
-        "STOP_LOSS: <a concrete price level, meaningfully below the CURRENT "
-        "PRICE given in the evidence (a real risk buffer, not a price within "
-        "a dollar or two of the current price) — always give one>\n"
-        "TAKE_PROFIT: <a concrete price level, meaningfully above the CURRENT "
-        "PRICE for a bullish stance (or below it for a bearish stance) — this "
-        "must represent a real, worthwhile move, not a trivial change of a "
-        "few dollars or a fraction of a percent. Base it on a sensible "
-        "reward-to-risk ratio relative to the stop-loss distance — always "
-        "give one>\n"
+        "ENTRY_ZONE: <Grounded in CURRENT PRICE. If ENTER_LONG: the specific "
+        "price zone to buy NOW or on a small near-term dip (within 2-3% of "
+        "current price). If HOLD/WATCH: give a realistic action — either a "
+        "small starter position at current levels, or a limit order within "
+        "3-5% of current price at a nearby support level. NEVER suggest "
+        "waiting for a large pullback (5%+) that may never happen — if the "
+        "setup isn't attractive now, say so plainly and give the current "
+        "price as the reference. Always include the current price in your "
+        "answer so the reader can judge the distance.>\n"
+        "STOP_LOSS: <a concrete price level BELOW YOUR ENTRY_ZONE (not below "
+        "the current price — below where you're suggesting to enter). This "
+        "is the 'I was wrong' level. Must be meaningfully below entry — "
+        "typically 3-8% depending on the stock's volatility. Never set "
+        "stop-loss at the same level as entry zone.>\n"
+        "TAKE_PROFIT: <a concrete price level ABOVE YOUR ENTRY_ZONE for a "
+        "bullish stance (or below for bearish). Must represent a realistic "
+        "move — base it on the stock's recent trading range, analyst "
+        "targets, or technical resistance. Minimum 2:1 reward-to-risk "
+        "ratio vs the stop-loss distance.>\n"
         "RISK_LEVEL: <LOW, MEDIUM, or HIGH>\n"
         "RISK_REASONING: <one sentence>"
     )
@@ -255,6 +261,7 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
     try:
         response = client.chat(system, evidence_block, temperature=0.2)
         parsed = _parse_chief_response(response)
+        parsed = _validate_chief_output(parsed, current_price)
     except RuntimeError as e:
         logger.warning(f"Chief analyst LLM unavailable, falling back to deterministic vote: {e}")
         llm_used = False
@@ -316,6 +323,72 @@ def _parse_chief_response(text: str) -> dict:
         fields["summary"] = text[:400]
 
     return fields
+
+
+def _validate_chief_output(parsed: dict, current_price: float | None) -> dict:
+    """Sanity-check the LLM output and fix common nonsense patterns.
+
+    Catches:
+    - Entry zone and stop-loss at the same level
+    - Entry zone suggesting a huge pullback (>10% from current price)
+    - Stop-loss above entry for a bullish stance
+    - Take-profit below entry for a bullish stance
+    """
+    if current_price is None or current_price <= 0:
+        return parsed
+
+    import re
+
+    def extract_price(text: str) -> float | None:
+        """Pull the first dollar price from a string."""
+        matches = re.findall(r'\$([\d,]+\.?\d*)', text)
+        if matches:
+            return float(matches[0].replace(',', ''))
+        # Try bare numbers
+        matches = re.findall(r'(?<!\w)(\d+\.\d{1,2})(?!\w)', text)
+        if matches:
+            val = float(matches[0])
+            if 10 < val < 10000:  # plausible stock price range
+                return val
+        return None
+
+    entry_price = extract_price(parsed.get('entry_zone', ''))
+    stop_price = extract_price(parsed.get('stop_loss', ''))
+    target_price = extract_price(parsed.get('take_profit', ''))
+
+    state = parsed.get('final_state', 'HOLD')
+
+    # Fix: entry and stop-loss at the same level
+    if entry_price and stop_price and abs(entry_price - stop_price) < current_price * 0.005:
+        # Stop-loss too close to entry — set it 5% below entry
+        new_stop = round(entry_price * 0.95, 2)
+        parsed['stop_loss'] = f'${new_stop:.2f} (adjusted — original was too close to entry)'
+        stop_price = new_stop
+
+    # Fix: stop-loss above entry for bullish stance
+    if entry_price and stop_price and state == 'ENTER_LONG' and stop_price > entry_price:
+        new_stop = round(entry_price * 0.95, 2)
+        parsed['stop_loss'] = f'${new_stop:.2f} (adjusted — stop must be below entry)'
+        stop_price = new_stop
+
+    # Fix: take-profit below entry for bullish stance
+    if entry_price and target_price and state == 'ENTER_LONG' and target_price < entry_price:
+        new_target = round(entry_price * 1.10, 2)
+        parsed['take_profit'] = f'${new_target:.2f} (adjusted — target must be above entry)'
+
+    # Fix: entry zone suggesting huge pullback for non-bullish states
+    if entry_price and state in ('WATCH', 'HOLD'):
+        pullback_pct = (current_price - entry_price) / current_price * 100
+        if pullback_pct > 8:
+            # Entry suggestion is >8% below current — flag it as unrealistic
+            parsed['entry_zone'] = (
+                f'${current_price:.2f} (current price). The suggested entry at '
+                f'${entry_price:.2f} requires a {pullback_pct:.0f}% pullback that may '
+                f'never happen. Consider a small starter position at current levels '
+                f'or a limit order within 3-5% of current price.'
+            )
+
+    return parsed
 
 
 def _fallback_from_lean(lean: float, debate) -> dict:
