@@ -115,18 +115,55 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
 
     lean, counted = _deterministic_lean(technical_signals)
 
-    strategy_breakdown = [
-        {
-            "strategy": s.get("strategy"),
+    # Pull backtest win rates for each strategy from strategy_performance
+    from packages.domain.entities.models import StrategyPerformance
+
+    strategy_breakdown = []
+    for s in technical_signals:
+        if s.get("error"):
+            continue
+        strat_name = s.get("strategy")
+        win_rate = None
+        # Try instrument-specific win rate first, then aggregate
+        if strat_name:
+            try:
+                perf_result = await db.execute(
+                    select(StrategyPerformance).where(
+                        StrategyPerformance.strategy_name == strat_name,
+                        StrategyPerformance.instrument_id == instrument_id,
+                    )
+                )
+                perf = perf_result.scalar_one_or_none()
+                if perf and perf.win_rate is not None:
+                    win_rate = float(perf.win_rate)
+            except Exception:
+                pass
+            # Fallback: aggregate across all instruments
+            if win_rate is None:
+                try:
+                    agg_result = await db.execute(
+                        select(StrategyPerformance).where(
+                            StrategyPerformance.strategy_name == strat_name,
+                        )
+                    )
+                    all_perfs = agg_result.scalars().all()
+                    valid = [float(p.win_rate) for p in all_perfs if p.win_rate is not None and p.total_trades and p.total_trades > 0]
+                    if valid:
+                        win_rate = sum(valid) / len(valid)
+                except Exception:
+                    pass
+
+        strategy_breakdown.append({
+            "strategy": strat_name,
             "state": s.get("state"),
             "confidence": s.get("confidence"),
-        }
-        for s in technical_signals if not s.get("error")
-    ]
+            "win_rate": win_rate,
+        })
 
     # Build the evidence block for the Chief Analyst LLM pass.
     strategy_lines = "\n".join(
         f"- {b['strategy']}: {b['state']} (confidence {b['confidence']:.0%})"
+        + (f" — historical win rate: {b['win_rate']:.0f}%" if b.get('win_rate') is not None else " — no backtest data yet")
         for b in strategy_breakdown
     ) or "No technical strategies produced a signal."
 
@@ -173,13 +210,18 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
     system = (
         "You are the chief analyst synthesizing multiple inputs into ONE final "
         "recommendation for a retail investor. You are given: (1) a set of "
-        "independent technical trading strategies, each with its own verdict "
-        "and confidence, (2) a separate debate-based verdict informed by "
-        "news and congressional trading activity, and (3) Wall Street analyst "
-        "consensus data (average price target and rating from professional "
-        "analysts covering the stock, when available). These inputs may "
-        "disagree — that is normal and expected. Weigh them honestly; do not "
-        "force false consensus. IMPORTANT: your STOP_LOSS and TAKE_PROFIT "
+        "independent technical trading strategies, each with its own verdict, "
+        "confidence, AND historical backtest win rate for this specific stock "
+        "(or aggregate across all stocks if per-stock data isn't available), "
+        "(2) a separate debate-based verdict informed by news and congressional "
+        "trading activity, and (3) Wall Street analyst consensus data (average "
+        "price target and rating from professional analysts covering the stock, "
+        "when available). These inputs may disagree — that is normal and expected. "
+        "IMPORTANT: Weigh strategies by their historical win rate — a strategy "
+        "with a 65% win rate on this stock deserves more weight than one with "
+        "40%. If a strategy has no backtest data yet, treat its opinion as "
+        "unverified and weigh it cautiously. Do not force false consensus. "
+        "IMPORTANT: your STOP_LOSS and TAKE_PROFIT "
         "numbers must be your own reasoned levels based on ALL the evidence "
         "together (current price, technical levels, and analyst target range) "
         "— do not simply copy a number from the debate section without "

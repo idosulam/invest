@@ -18,6 +18,7 @@ import {
   Server,
   LogOut,
   User,
+  Target,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/instruments", label: "Instruments", icon: LineChart },
   { href: "/watchlists", label: "Watchlists", icon: ListOrdered },
   { href: "/signals", label: "Signals", icon: Activity },
+  { href: "/strategies", label: "Strategies", icon: Target },
   { href: "/scanner", label: "Scanner", icon: ScanLine },
   { href: "/discover", label: "Discover", icon: Compass },
   { href: "/backtests", label: "Backtests", icon: FlaskConical },

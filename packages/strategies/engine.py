@@ -206,6 +206,20 @@ async def generate_signals_for_instrument(
     # Get fundamentals
     fundamentals = await get_fundamentals(db, instrument_id)
 
+    # Fetch benchmark (SPY) bars for strategies that need relative strength
+    benchmark_bars = None
+    try:
+        spy_result = await db.execute(
+            select(Instrument).where(Instrument.symbol == "SPY")
+        )
+        spy = spy_result.scalar_one_or_none()
+        if spy:
+            benchmark_bars = await get_bars_for_instrument(db, spy.id, timeframe=target_timeframe, limit=250)
+            if benchmark_bars.empty and target_timeframe != Timeframe.DAILY:
+                benchmark_bars = await get_bars_for_instrument(db, spy.id, timeframe=Timeframe.DAILY, limit=250)
+    except Exception:
+        pass  # SPY not ingested — relative strength strategy will report NO_SIGNAL
+
     # Build market context
     context = MarketContext(
         instrument_id=instrument_id,
@@ -213,6 +227,7 @@ async def generate_signals_for_instrument(
         bars=df,
         indicators=indicators,
         fundamentals=fundamentals,
+        benchmark_bars=benchmark_bars,
         as_of=datetime.utcnow(),
     )
 

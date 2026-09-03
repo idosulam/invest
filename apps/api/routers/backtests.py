@@ -14,10 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth import get_current_user, require_analyst
 from apps.api.database import get_db
-from packages.domain.entities.models import BacktestRun, MarketBar, Instrument, User, DataSnapshot, StrategyVersion
+from packages.domain.entities.models import BacktestRun, MarketBar, Instrument, User, DataSnapshot, StrategyVersion, StrategyPerformance
 from packages.domain.enums.common import BacktestStatus, Timeframe, Horizon
 from packages.backtest.vectorized.engine import (
     BacktestConfig, run_sma_crossover_backtest, run_rsi_backtest, run_obv_backtest,
+    run_opening_range_breakout_backtest, run_vwap_reclaim_backtest,
+    run_intraday_momentum_backtest, run_volatility_expansion_backtest,
+    run_relative_strength_spy_backtest,
 )
 from packages.backtest.event_driven.engine import (
     EventDrivenBacktester, BacktestConfig as EventBacktestConfig,
@@ -33,7 +36,7 @@ router = APIRouter(prefix="/backtests", tags=["backtests"])
 
 class BacktestRunRequest(BaseModel):
     instrument_id: uuid.UUID
-    strategy: str = "sma_crossover"  # sma_crossover | rsi_reversion | obv_trend | obv_trend
+    strategy: str = "sma_crossover"  # sma_crossover | rsi_reversion | obv_trend | opening_range_breakout | vwap_reclaim | intraday_momentum | volatility_expansion
     timeframe: Timeframe = Timeframe.DAILY
     # Strategy params
     fast_period: int = 20
@@ -79,6 +82,7 @@ class BacktestResponse(BaseModel):
     trades_count: int = 0
     config: dict = {}
     error: Optional[str] = None
+    data_caveat: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
 
@@ -146,6 +150,40 @@ async def run_backtest(
         bt_result = run_rsi_backtest(df, req.rsi_period, req.rsi_oversold, req.rsi_overbought, config)
     elif req.strategy == "obv_trend":
         bt_result = run_obv_backtest(df, 20, config)
+    elif req.strategy == "opening_range_breakout":
+        bt_result = run_opening_range_breakout_backtest(df, 2, config)
+    elif req.strategy == "vwap_reclaim":
+        bt_result = run_vwap_reclaim_backtest(df, 20, config)
+    elif req.strategy == "intraday_momentum":
+        bt_result = run_intraday_momentum_backtest(df, 14, 12, 26, config)
+    elif req.strategy == "volatility_expansion":
+        bt_result = run_volatility_expansion_backtest(df, 20, 2.0, config)
+    elif req.strategy == "relative_strength_spy":
+        # Fetch SPY benchmark bars
+        spy_result = await db.execute(select(Instrument).where(Instrument.symbol == "SPY"))
+        spy = spy_result.scalar_one_or_none()
+        if not spy:
+            raise HTTPException(status_code=400, detail="SPY not found in instruments — ingest it first")
+        spy_bars_result = await db.execute(
+            select(MarketBar)
+            .where(MarketBar.instrument_id == spy.id, MarketBar.timeframe == req.timeframe)
+            .order_by(MarketBar.ts_open)
+        )
+        spy_bars = spy_bars_result.scalars().all()
+        if len(spy_bars) < 60:
+            raise HTTPException(status_code=400, detail=f"SPY needs at least 60 bars, got {len(spy_bars)}")
+        spy_df = pd.DataFrame([
+            {
+                "ts_open": b.ts_open,
+                "open": float(b.open),
+                "high": float(b.high),
+                "low": float(b.low),
+                "close": float(b.close),
+                "volume": float(b.volume),
+            }
+            for b in spy_bars
+        ])
+        bt_result = run_relative_strength_spy_backtest(df, spy_df, 20, 60, config)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy}")
 
@@ -203,6 +241,50 @@ async def run_backtest(
     db.add(db_run)
     await db.flush()
 
+    # Upsert into strategy_performance for fast lookups
+    from sqlalchemy import select as _select
+    existing_perf = await db.execute(
+        _select(StrategyPerformance).where(
+            StrategyPerformance.strategy_name == req.strategy,
+            StrategyPerformance.instrument_id == req.instrument_id,
+        )
+    )
+    perf = existing_perf.scalar_one_or_none()
+    if perf:
+        perf.total_return = bt_result.metrics.total_return
+        perf.annualized_return = bt_result.metrics.annualized_return
+        perf.sharpe_ratio = bt_result.metrics.sharpe_ratio
+        perf.sortino_ratio = bt_result.metrics.sortino_ratio
+        perf.max_drawdown = bt_result.metrics.max_drawdown
+        perf.win_rate = bt_result.metrics.win_rate
+        perf.payoff_ratio = bt_result.metrics.payoff_ratio
+        perf.total_trades = bt_result.metrics.total_trades
+        perf.total_costs = bt_result.metrics.total_costs
+        perf.data_caveat = bt_result.data_caveat
+        perf.backtest_run_id = db_run.id
+        perf.config = db_run.assumptions
+        perf.run_at = datetime.utcnow()
+    else:
+        perf = StrategyPerformance(
+            strategy_name=req.strategy,
+            instrument_id=req.instrument_id,
+            symbol=instrument.symbol,
+            total_return=bt_result.metrics.total_return,
+            annualized_return=bt_result.metrics.annualized_return,
+            sharpe_ratio=bt_result.metrics.sharpe_ratio,
+            sortino_ratio=bt_result.metrics.sortino_ratio,
+            max_drawdown=bt_result.metrics.max_drawdown,
+            win_rate=bt_result.metrics.win_rate,
+            payoff_ratio=bt_result.metrics.payoff_ratio,
+            total_trades=bt_result.metrics.total_trades,
+            total_costs=bt_result.metrics.total_costs,
+            data_caveat=bt_result.data_caveat,
+            backtest_run_id=db_run.id,
+            config=db_run.assumptions,
+        )
+        db.add(perf)
+    await db.flush()
+
     return BacktestResponse(
         id=db_run.id,
         instrument_id=req.instrument_id,
@@ -231,6 +313,7 @@ async def run_backtest(
         trades_count=len(bt_result.trades),
         config=db_run.assumptions,
         error=bt_result.error,
+        data_caveat=bt_result.data_caveat,
         created_at=db_run.created_at,
         completed_at=db_run.completed_at,
     )
@@ -290,11 +373,85 @@ async def get_backtest(
     )
 
 
+# ── Strategy Performance (persisted lookups) ────────────────
+
+class StrategyPerformanceResponse(BaseModel):
+    strategy_name: str
+    instrument_id: uuid.UUID
+    symbol: str
+    total_return: Optional[float] = None
+    annualized_return: Optional[float] = None
+    sharpe_ratio: Optional[float] = None
+    sortino_ratio: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    win_rate: Optional[float] = None
+    payoff_ratio: Optional[float] = None
+    total_trades: Optional[int] = None
+    total_costs: Optional[float] = None
+    data_caveat: Optional[str] = None
+    run_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StrategyPerformanceListResponse(BaseModel):
+    items: list[StrategyPerformanceResponse]
+    total: int
+
+
+@router.get("/performance", response_model=StrategyPerformanceListResponse)
+async def list_strategy_performance(
+    strategy: Optional[str] = Query(None),
+    instrument_id: Optional[uuid.UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """List persisted strategy performance results.
+
+    Filter by strategy name and/or instrument. Returns the latest
+    backtest result for each strategy×instrument pair.
+    """
+    query = select(StrategyPerformance)
+    if strategy:
+        query = query.where(StrategyPerformance.strategy_name == strategy)
+    if instrument_id:
+        query = query.where(StrategyPerformance.instrument_id == instrument_id)
+    query = query.order_by(desc(StrategyPerformance.run_at))
+
+    result = await db.execute(query)
+    rows = result.scalars().all()
+
+    return StrategyPerformanceListResponse(
+        items=[StrategyPerformanceResponse.model_validate(r) for r in rows],
+        total=len(rows),
+    )
+
+
+@router.get("/performance/{strategy}/{instrument_id}", response_model=StrategyPerformanceResponse)
+async def get_strategy_performance(
+    strategy: str,
+    instrument_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Get persisted performance for a specific strategy×instrument pair."""
+    result = await db.execute(
+        select(StrategyPerformance).where(
+            StrategyPerformance.strategy_name == strategy,
+            StrategyPerformance.instrument_id == instrument_id,
+        )
+    )
+    perf = result.scalar_one_or_none()
+    if not perf:
+        raise HTTPException(status_code=404, detail="No performance data found for this strategy/instrument pair")
+    return StrategyPerformanceResponse.model_validate(perf)
+
+
 # ── Event-Driven Backtest ───────────────────────────────────
 
 class EventDrivenBacktestRequest(BaseModel):
     instrument_id: uuid.UUID
-    strategy: str = "sma_crossover"  # sma_crossover | rsi_reversion | obv_trend | obv_trend
+    strategy: str = "sma_crossover"  # sma_crossover | rsi_reversion | obv_trend | opening_range_breakout | vwap_reclaim | intraday_momentum | volatility_expansion
     timeframe: Timeframe = Timeframe.DAILY
     fast_period: int = 20
     slow_period: int = 50

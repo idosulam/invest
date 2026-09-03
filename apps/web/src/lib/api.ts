@@ -122,6 +122,28 @@ export const signals = {
     request<any>(`/signals/consolidated/${instrumentId}`, { method: "POST" }),
 };
 
+/* ── Strategies ── */
+
+export const strategies = {
+  list: (horizon?: string) => {
+    const qs = horizon ? `?horizon=${horizon}` : "";
+    return request<any[]>(`/signals/strategies${qs}`);
+  },
+};
+
+/* ── Strategy Performance ── */
+
+export const strategyPerformance = {
+  list: (params?: { strategy?: string; instrument_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.strategy) qs.set("strategy", params.strategy);
+    if (params?.instrument_id) qs.set("instrument_id", params.instrument_id);
+    return request<any>(`/backtests/performance?${qs}`);
+  },
+  get: (strategy: string, instrumentId: string) =>
+    request<any>(`/backtests/performance/${strategy}/${instrumentId}`),
+};
+
 export const scanner = {
   run: (
     filters: Record<string, any>,

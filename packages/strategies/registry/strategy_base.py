@@ -49,6 +49,7 @@ class MarketContext:
     bars: pd.DataFrame  # OHLCV, chronological
     indicators: dict[str, pd.Series]  # pre-computed indicators
     fundamentals: dict[str, float] = field(default_factory=dict)
+    benchmark_bars: Optional[pd.DataFrame] = None  # e.g. SPY bars for relative strength
     as_of: datetime = field(default_factory=datetime.utcnow)
 
 

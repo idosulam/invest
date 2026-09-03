@@ -648,6 +648,9 @@ export default function SignalsPage() {
                             className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700"
                           >
                             {s.strategy}: {s.state}
+                            {s.win_rate != null && (
+                              <span className="ml-1 text-surface-500">({s.win_rate.toFixed(0)}% WR)</span>
+                            )}
                           </span>
                         ))}
                       </div>

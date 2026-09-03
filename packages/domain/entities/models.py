@@ -286,6 +286,44 @@ class BacktestRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+# ── 10b. Strategy Performance (persisted backtest results) ───
+class StrategyPerformance(Base):
+    """Latest backtest result per strategy × instrument.
+
+    Upserted every time a backtest runs, so the API can return
+    a real result without re-running the backtest.
+    """
+    __tablename__ = "strategy_performance"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    strategy_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instruments.id"), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    # Key metrics
+    total_return: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    annualized_return: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    sharpe_ratio: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    sortino_ratio: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    max_drawdown: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    win_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 1))
+    payoff_ratio: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    total_trades: Mapped[Optional[int]] = mapped_column(Integer)
+    total_costs: Mapped[Optional[float]] = mapped_column(Numeric(12, 2))
+    # Metadata
+    data_caveat: Mapped[Optional[str]] = mapped_column(Text)
+    backtest_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("backtest_runs.id")
+    )
+    config: Mapped[Optional[dict]] = mapped_column(JSON)
+    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("strategy_name", "instrument_id", name="uq_strategy_instrument"),
+    )
+
+
 # ── 11. Model Version ───────────────────────────────────────
 class ModelVersion(Base):
     __tablename__ = "model_versions"
