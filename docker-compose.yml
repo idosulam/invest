@@ -69,6 +69,7 @@ services:
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages:/app/packages
+      - ./db/migrations:/app/db/migrations
     command: >
       uvicorn apps.api.main:app
       --host 0.0.0.0

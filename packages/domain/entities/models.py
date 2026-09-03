@@ -239,6 +239,7 @@ class Signal(Base):
     invalidation_rule: Mapped[Optional[str]] = mapped_column(Text)
     invalidation_level: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6))
     target_method: Mapped[Optional[str]] = mapped_column(String(50))
+    target_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
     max_loss_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))
     suggested_size_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
@@ -483,6 +484,44 @@ class DataIssue(Base):
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+# ── 18b. News Articles ──────────────────────────────────────
+class NewsArticle(Base):
+    __tablename__ = "news_articles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instruments.id"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(100), nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sentiment_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4))
+    sentiment_label: Mapped[Optional[str]] = mapped_column(String(30))
+    relevance_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+# ── 18c. Congressional Trades ───────────────────────────────
+class CongressTradeRecord(Base):
+    __tablename__ = "congress_trades"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instruments.id"), nullable=False
+    )
+    member_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    chamber: Mapped[str] = mapped_column(String(20), nullable=False)  # House, Senate
+    trade_type: Mapped[str] = mapped_column(String(10), nullable=False)  # buy, sell
+    amount_range: Mapped[str] = mapped_column(String(100))
+    transaction_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    disclosed_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    asset_name: Mapped[Optional[str]] = mapped_column(String(300))
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 # ── 19. User (Auth) ─────────────────────────────────────────

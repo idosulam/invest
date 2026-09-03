@@ -156,14 +156,14 @@ class YahooFinanceProvider:
 
                 # Map common fields
                 field_map = {
-                    "marketCap": ("market_capitalization", "USD"),
-                    "trailingPE": ("pe_ratio_ttm", "ratio"),
-                    "forwardPE": ("pe_ratio_forward", "ratio"),
-                    "priceToBook": ("price_to_book", "ratio"),
-                    "dividendYield": ("dividend_yield", "ratio"),
+                    "market_cap": ("market_capitalization", "USD"),
+                    "trailing_pe": ("pe_ratio_ttm", "ratio"),
+                    "forward_pe": ("pe_ratio_forward", "ratio"),
+                    "price_to_book": ("price_to_book", "ratio"),
+                    "dividend_yield": ("dividend_yield", "ratio"),
                     "beta": ("beta", "ratio"),
-                    "trailingEps": ("eps_ttm", "USD"),
-                    "forwardEps": ("eps_forward", "USD"),
+                    "trailing_eps": ("eps_ttm", "USD"),
+                    "forward_eps": ("eps_forward", "USD"),
                     "revenue": ("revenue", "USD"),
                     "totalRevenue": ("revenue", "USD"),
                     "profitMargins": ("profit_margin", "ratio"),

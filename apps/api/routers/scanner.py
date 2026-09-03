@@ -236,18 +236,18 @@ async def run_scan(
     pe_data: dict[uuid.UUID, float] = {}
     mcap_data: dict[uuid.UUID, float] = {}
 
-    if filters.max_pe is not None or filters.min_pe is not None or filters.min_market_cap is not None:
-        fund_result = await db.execute(
-            select(FundamentalFact).where(
-                FundamentalFact.instrument_id.in_(inst_ids),
-                FundamentalFact.taxonomy.in_(["pe_ratio_ttm", "market_capitalization"]),
-            )
+    # Always fetch — used for display even when not filtering on them
+    fund_result = await db.execute(
+        select(FundamentalFact).where(
+            FundamentalFact.instrument_id.in_(inst_ids),
+            FundamentalFact.taxonomy.in_(["pe_ratio_ttm", "market_capitalization"]),
         )
-        for f in fund_result.scalars().all():
-            if f.taxonomy == "pe_ratio_ttm":
-                pe_data[f.instrument_id] = float(f.value)
-            elif f.taxonomy == "market_capitalization":
-                mcap_data[f.instrument_id] = float(f.value)
+    )
+    for f in fund_result.scalars().all():
+        if f.taxonomy == "pe_ratio_ttm":
+            pe_data[f.instrument_id] = float(f.value)
+        elif f.taxonomy == "market_capitalization":
+            mcap_data[f.instrument_id] = float(f.value)
 
     # 4. Compute indicators and apply filters
     results: list[ScanResult] = []
@@ -328,3 +328,83 @@ async def run_scan(
     elapsed_ms = round((time.time() - start_time) * 1000, 1)
 
     return ScanResponse(results=results, total=total, scan_time_ms=elapsed_ms)
+
+
+# ── Discovery: market-wide trending screener ────────────────
+
+class DiscoveryResult(BaseModel):
+    symbol: str
+    name: Optional[str] = None
+    last_price: Optional[float] = None
+    change_pct: Optional[float] = None
+    volume: Optional[float] = None
+    market_cap: Optional[float] = None
+    already_tracked: bool = False
+
+
+class DiscoveryResponse(BaseModel):
+    results: list[DiscoveryResult]
+    screener: str
+    total: int
+
+
+DISCOVERY_SCREENERS = {
+    "most_active": "most_actives",
+    "day_gainers": "day_gainers",
+    "day_losers": "day_losers",
+    "growth_tech": "growth_technology_stocks",
+    "small_cap_gainers": "small_cap_gainers",
+}
+
+
+@router.get("/discover", response_model=DiscoveryResponse)
+async def discover_trending(
+    screener: str = Query("most_active", description=f"One of: {', '.join(DISCOVERY_SCREENERS.keys())}"),
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Discover trending/active stocks from the broader market (not just tracked instruments).
+
+    Pulls from Yahoo Finance's predefined screeners — no ticker list needed upfront.
+    Cross-references against your tracked instruments so the UI can show which
+    ones you already have and which are new candidates to add.
+    """
+    if screener not in DISCOVERY_SCREENERS:
+        raise HTTPException(status_code=400, detail=f"Unknown screener. Choose from: {list(DISCOVERY_SCREENERS.keys())}")
+
+    import yfinance as yf
+
+    try:
+        yahoo_screener_id = DISCOVERY_SCREENERS[screener]
+        data = yf.screen(yahoo_screener_id, count=limit)
+        quotes = data.get("quotes", [])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch screener data: {e}")
+
+    symbols_found = [q.get("symbol") for q in quotes if q.get("symbol")]
+
+    # Cross-reference against tracked instruments
+    tracked_symbols = set()
+    if symbols_found:
+        result = await db.execute(
+            select(Instrument.symbol).where(Instrument.symbol.in_(symbols_found))
+        )
+        tracked_symbols = {row[0] for row in result.all()}
+
+    results = []
+    for q in quotes:
+        symbol = q.get("symbol")
+        if not symbol:
+            continue
+        results.append(DiscoveryResult(
+            symbol=symbol,
+            name=q.get("shortName") or q.get("longName"),
+            last_price=q.get("regularMarketPrice"),
+            change_pct=q.get("regularMarketChangePercent"),
+            volume=q.get("regularMarketVolume"),
+            market_cap=q.get("marketCap"),
+            already_tracked=symbol in tracked_symbols,
+        ))
+
+    return DiscoveryResponse(results=results, screener=screener, total=len(results))

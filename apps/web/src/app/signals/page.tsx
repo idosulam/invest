@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useInstruments } from "@/hooks/useApi";
+import { signals as signalsApi } from "@/lib/api";
 import Link from "next/link";
 import {
   Activity,
@@ -37,6 +39,7 @@ interface SignalData {
   invalidation_rule: string | null;
   invalidation_level: number | null;
   target_method: string | null;
+  target_price: number | null;
   max_loss_pct: number | null;
   suggested_size_pct: number | null;
   confidence: number;
@@ -57,6 +60,18 @@ const STATE_CONFIG: Record<string, { color: string; bg: string; icon: any; label
   WATCH: { color: "text-surface-700", bg: "bg-surface-100", icon: Eye, label: "Watch" },
   NO_SIGNAL: { color: "text-surface-200", bg: "bg-surface-50", icon: Minus, label: "No Signal" },
 };
+
+const STATE_GUIDANCE: Record<string, string> = {
+  ENTER_LONG: "This strategy sees a buy setup right now. Consider entering within the entry zone below, with the stop-loss at the invalidation level.",
+  EXIT: "This strategy is signaling to close an existing position in this stock — the setup that justified holding it has broken down.",
+  REDUCE: "Consider trimming an existing position — the strategy sees rising risk but not a full exit signal yet.",
+  HOLD: "No action needed. If you already hold this position, the strategy sees no reason to change it yet.",
+  WATCH: "Not an entry yet. The strategy is tracking a potential setup — check back as conditions develop.",
+  NO_SIGNAL: "This strategy found nothing actionable for this stock right now.",
+};
+
+const CONFIDENCE_EXPLAINER =
+  "Confidence reflects how strongly the underlying data supports this signal — based on factors like how well similar setups have worked historically, current market conditions, and data quality. It is not a probability of profit, and even high-confidence signals can be wrong.";
 
 const GATE_CONFIG: Record<string, { color: string; icon: any }> = {
   PASS: { color: "text-success-500", icon: CheckCircle },
@@ -125,7 +140,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
               </span>
             </div>
             <p className="text-sm text-surface-700 mt-0.5">{signal.instrument_name}</p>
-            <p className="text-xs text-surface-200 mt-1">
+            <p className="text-xs text-surface-500 mt-1">
               {signal.strategy_name} · {new Date(signal.as_of).toLocaleDateString()}
             </p>
           </div>
@@ -156,12 +171,19 @@ function SignalCard({ signal }: { signal: SignalData }) {
 
           {/* Why? button */}
           <button
-            onClick={(e) => { e.stopPropagation(); askWhy(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (explanation) {
+                setExplanation(null);
+              } else {
+                askWhy();
+              }
+            }}
             disabled={loadingWhy}
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-50"
           >
             {loadingWhy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            Why?
+            {explanation ? "Hide" : "Why?"}
           </button>
 
           {/* Expand */}
@@ -172,6 +194,12 @@ function SignalCard({ signal }: { signal: SignalData }) {
       {/* Expanded details */}
       {expanded && (
         <div className="mt-4 pt-4 border-t border-surface-200 space-y-4">
+          {/* Plain-language guidance */}
+          <div className={`rounded-lg p-3 text-sm ${stateCfg.bg} ${stateCfg.color}`}>
+            <span className="font-medium">{stateCfg.label}:</span>{" "}
+            {STATE_GUIDANCE[signal.state] ?? "No guidance available for this state."}
+          </div>
+
           {/* Key levels */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {signal.entry_zone_low && signal.entry_zone_high && (
@@ -184,11 +212,18 @@ function SignalCard({ signal }: { signal: SignalData }) {
             )}
             {signal.invalidation_level && (
               <div>
-                <p className="text-xs text-surface-700 mb-1">Invalidation</p>
+                <p className="text-xs text-surface-700 mb-1">Stop-Loss</p>
                 <p className="font-mono text-sm text-danger-500">{format.currency(signal.invalidation_level)}</p>
                 {signal.invalidation_rule && (
-                  <p className="text-xs text-surface-200 mt-0.5">{signal.invalidation_rule}</p>
+                  <p className="text-xs text-surface-500 mt-0.5">{signal.invalidation_rule}</p>
                 )}
+              </div>
+            )}
+            {signal.target_price && (
+              <div>
+                <p className="text-xs text-surface-700 mb-1">Take Profit</p>
+                <p className="font-mono text-sm text-success-600">{format.currency(signal.target_price)}</p>
+                <p className="text-xs text-surface-500 mt-0.5">2:1 reward-to-risk target</p>
               </div>
             )}
             {signal.max_loss_pct && (
@@ -217,7 +252,8 @@ function SignalCard({ signal }: { signal: SignalData }) {
 
           {/* Confidence Breakdown */}
           <div>
-            <p className="text-xs text-surface-700 mb-1.5">Confidence Breakdown</p>
+            <p className="text-xs text-surface-700 mb-1">Confidence Breakdown</p>
+            <p className="text-xs text-surface-500 mb-1.5">{CONFIDENCE_EXPLAINER}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {[
                 { label: "Strategy Validation", weight: "20%" },
@@ -230,7 +266,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
               ].map((comp) => (
                 <div key={comp.label} className="bg-surface-50 rounded p-2">
                   <p className="text-xs text-surface-700">{comp.label}</p>
-                  <p className="text-xs text-surface-200">{comp.weight}</p>
+                  <p className="text-xs text-surface-500">{comp.weight}</p>
                 </div>
               ))}
             </div>
@@ -269,9 +305,17 @@ function SignalCard({ signal }: { signal: SignalData }) {
       {/* AI Explanation */}
       {explanation && (
         <div className="mt-4 pt-4 border-t border-surface-200">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-primary-500" />
-            <p className="text-sm font-medium text-surface-900">AI Analysis</p>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary-500" />
+              <p className="text-sm font-medium text-surface-900">AI Analysis</p>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setExplanation(null); }}
+              className="text-xs text-surface-500 hover:text-surface-900"
+            >
+              Close
+            </button>
           </div>
           <div className="text-sm text-surface-700 whitespace-pre-wrap bg-surface-50 rounded-lg p-3">
             {explanation}
@@ -322,8 +366,75 @@ export default function SignalsPage() {
   }, [horizonFilter, stateFilter]);
 
   const [generating, setGenerating] = useState(false);
-  const [genInstrumentId, setGenInstrumentId] = useState("");
+  const [fullAnalysisResults, setFullAnalysisResults] = useState<any[]>([]);
+  const [runningFull, setRunningFull] = useState(false);
+  const [fullAnalysisError, setFullAnalysisError] = useState("");
+  const [fullAnalysisProgress, setFullAnalysisProgress] = useState("");
 
+  const runFullAnalysis = async () => {
+    setRunningFull(true);
+    setFullAnalysisError("");
+    setFullAnalysisResults([]);
+    setFullAnalysisProgress("Loading tracked instruments...");
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const instRes = await fetch("/api/v1/instruments?page_size=100", { headers: authHeader });
+      if (!instRes.ok) throw new Error("Failed to load instruments");
+      const instData = await instRes.json();
+      const allInstruments = instData.items || [];
+
+      if (allInstruments.length === 0) {
+        setFullAnalysisError("No instruments tracked yet — add some first.");
+        setRunningFull(false);
+        return;
+      }
+
+      const results: any[] = [];
+      for (let i = 0; i < allInstruments.length; i++) {
+        const inst = allInstruments[i];
+        setFullAnalysisProgress(`Analyzing ${inst.symbol} (${i + 1}/${allInstruments.length})...`);
+        try {
+          const res = await fetch(`/api/v1/signals/consolidated/${inst.id}`, {
+            method: "POST",
+            headers: authHeader,
+          });
+          if (!res.ok) {
+            results.push({ symbol: inst.symbol, error: "Analysis failed" });
+            continue;
+          }
+          const data = await res.json();
+          results.push(data);
+        } catch (innerErr) {
+          results.push({ symbol: inst.symbol, error: "Analysis failed for this instrument" });
+        }
+      }
+
+      setFullAnalysisResults(results);
+      setFullAnalysisProgress("");
+
+      // Refresh the raw signals list underneath (used by the technical detail toggle)
+      const params = new URLSearchParams();
+      params.set("page_size", "100");
+      if (horizonFilter) params.set("horizon", horizonFilter);
+      if (stateFilter) params.set("state", stateFilter);
+      const listRes = await fetch(`/api/v1/signals?${params}`, { headers: authHeader });
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        setSignals(listData.items);
+        setTotal(listData.total);
+      }
+    } catch (e) {
+      setFullAnalysisError("Full analysis failed — check that the local LLM (Ollama) is running.");
+      console.error(e);
+    } finally {
+      setRunningFull(false);
+      setFullAnalysisProgress("");
+    }
+  };
+
+  const [genInstrumentId, setGenInstrumentId] = useState("");
   const generateSignals = async () => {
     if (!genInstrumentId) return;
     setGenerating(true);
@@ -367,6 +478,16 @@ export default function SignalsPage() {
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
               {generating ? "Generating..." : "Generate"}
+            </button>
+            <button
+              onClick={runFullAnalysis}
+              disabled={runningFull}
+              title="Runs technical strategies + Bull/Bear/Judge analysis for every tracked instrument"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+            >
+              {runningFull
+                ? fullAnalysisProgress || "Analyzing..."
+                : "Run Full Analysis (all stocks)"}
             </button>
             <select
               value={horizonFilter}
@@ -416,6 +537,140 @@ export default function SignalsPage() {
         })}
       </div>
 
+      {/* Full Analysis results */}
+      {fullAnalysisError && (
+        <Card className="mb-6 border-danger-200">
+          <p className="text-sm text-danger-600">{fullAnalysisError}</p>
+        </Card>
+      )}
+      {runningFull && (
+        <Card className="mb-6">
+          <p className="text-sm text-surface-700">{fullAnalysisProgress || "Analyzing..."}</p>
+        </Card>
+      )}
+      {fullAnalysisResults.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-surface-900">
+              Final Verdicts — {fullAnalysisResults.length} stocks
+            </p>
+            <button
+              onClick={() => setFullAnalysisResults([])}
+              className="text-xs text-surface-500 hover:text-surface-900"
+            >
+              Close all
+            </button>
+          </div>
+          <div className="space-y-3">
+            {fullAnalysisResults.map((item: any, idx: number) => {
+              if (item.error) {
+                return (
+                  <Card key={idx} className="border-danger-200">
+                    <p className="text-sm font-semibold text-surface-900">{item.symbol}</p>
+                    <p className="text-sm text-danger-600">{item.error}</p>
+                  </Card>
+                );
+              }
+              const actionLabel =
+                item.final_state === "ENTER_LONG" ? "BUY" :
+                item.final_state === "EXIT" ? "SELL" :
+                item.final_state === "REDUCE" ? "REDUCE" :
+                item.final_state === "WATCH" ? "WATCH" : "HOLD";
+              return (
+                <Card key={idx}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-surface-900">{item.symbol}</p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-bold ${
+                          actionLabel === "BUY"
+                            ? "bg-green-50 text-success-600"
+                            : actionLabel === "SELL"
+                            ? "bg-red-50 text-danger-600"
+                            : actionLabel === "REDUCE"
+                            ? "bg-amber-50 text-warning-600"
+                            : "bg-surface-100 text-surface-700"
+                        }`}
+                      >
+                        {actionLabel}
+                      </span>
+                      <span className="text-xs text-surface-500">
+                        {Math.round(item.final_confidence)}% confidence
+                      </span>
+                      {!item.llm_used && (
+                        <span className="text-xs text-warning-600">(mechanical vote only)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-surface-700 mb-3">{item.summary}</p>
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-medium text-surface-900">Risk:</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        item.risk_level === "LOW"
+                          ? "bg-green-50 text-success-600"
+                          : item.risk_level === "HIGH"
+                          ? "bg-red-50 text-danger-600"
+                          : "bg-amber-50 text-warning-600"
+                      }`}
+                    >
+                      {item.risk_level}
+                    </span>
+                    <span className="text-xs text-surface-500">{item.risk_reasoning}</span>
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-4 mb-3">
+                    <div>
+                      <p className="text-xs font-medium text-surface-900 mb-1">Entry</p>
+                      <p className="text-sm text-surface-700">{item.entry_zone}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-danger-600 mb-1">Stop-Loss</p>
+                      <p className="text-sm text-surface-700">{item.stop_loss}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-success-600 mb-1">Take-Profit</p>
+                      <p className="text-sm text-surface-700">{item.take_profit}</p>
+                    </div>
+                  </div>
+
+                  {item.strategy_breakdown?.length > 0 && (
+                    <details className="pt-3 border-t border-surface-200">
+                      <summary className="text-xs font-medium text-surface-900 cursor-pointer">
+                        Show strategy breakdown ({item.strategy_breakdown.length})
+                      </summary>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {item.strategy_breakdown.map((s: any, sidx: number) => (
+                          <span
+                            key={sidx}
+                            className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700"
+                          >
+                            {s.strategy}: {s.state}
+                          </span>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  <p className="text-xs text-surface-400 pt-3 border-t border-surface-200 mt-3">
+                    Combines technical strategies, news, and congressional trading activity.
+                    Does not yet include institutional 13F filings. This is reasoning over
+                    available evidence, not a statistical forecast.
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <details className="mb-3">
+        <summary className="text-sm text-surface-500 cursor-pointer">
+          Show individual technical strategy signals ({total})
+        </summary>
+
       {/* Signal cards */}
       {loading ? (
         <div className="h-64 flex items-center justify-center text-surface-700">Loading signals...</div>
@@ -436,6 +691,7 @@ export default function SignalsPage() {
           ))}
         </div>
       )}
+      </details>
     </div>
   );
 }

@@ -44,10 +44,10 @@ async def get_bars_for_instrument(
             MarketBar.instrument_id == instrument_id,
             MarketBar.timeframe == timeframe,
         )
-        .order_by(MarketBar.ts_open)
+        .order_by(MarketBar.ts_open.desc())
         .limit(limit)
     )
-    bars = result.scalars().all()
+    bars = list(reversed(result.scalars().all()))
 
     if not bars:
         return pd.DataFrame()
@@ -257,6 +257,8 @@ async def generate_signals_for_instrument(
                 instrument_sector=instrument.sector,
             )
 
+            print(f"[DEBUG] strategy={strategy.metadata.name} state={raw_signal.state} confidence={raw_signal.confidence}", flush=True)
+
             if raw_signal.state == SignalState.NO_SIGNAL:
                 continue
 
@@ -286,6 +288,21 @@ async def generate_signals_for_instrument(
             # Use the lower of risk gate confidence and calculated confidence
             final_confidence = min(gate_result.adjusted_confidence, conf_result.final_confidence)
 
+            # Compute a generic take-profit target using a 2:1 reward-to-risk
+            # ratio off the entry zone and invalidation (stop) level. This is a
+            # simple, consistent rule applied uniformly across all strategies —
+            # not a strategy-specific target, but a reasonable default so every
+            # signal has a concrete profit-taking level.
+            target_price = None
+            if raw_signal.entry_zone_low and raw_signal.invalidation_level:
+                entry_ref = raw_signal.entry_zone_high or raw_signal.entry_zone_low
+                risk_per_share = abs(entry_ref - raw_signal.invalidation_level)
+                if risk_per_share > 0:
+                    if raw_signal.state == SignalState.ENTER_LONG:
+                        target_price = entry_ref + (risk_per_share * Decimal("2"))
+                    elif raw_signal.state == SignalState.EXIT:
+                        target_price = entry_ref - (risk_per_share * Decimal("2"))
+
             # Create signal record
             signal = Signal(
                 instrument_id=instrument_id,
@@ -297,6 +314,7 @@ async def generate_signals_for_instrument(
                 invalidation_rule=raw_signal.invalidation_rule,
                 invalidation_level=raw_signal.invalidation_level,
                 target_method=raw_signal.target_method,
+                target_price=target_price,
                 max_loss_pct=strategy.risk_plan(raw_signal).max_loss_pct,
                 suggested_size_pct=strategy.risk_plan(raw_signal).suggested_size_pct,
                 confidence=Decimal(str(final_confidence)),
@@ -324,6 +342,7 @@ async def generate_signals_for_instrument(
                     "rule": raw_signal.invalidation_rule,
                     "level": float(raw_signal.invalidation_level) if raw_signal.invalidation_level else None,
                 },
+                "target_price": float(target_price) if target_price else None,
             })
 
         except Exception as e:

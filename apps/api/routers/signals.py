@@ -259,3 +259,101 @@ async def generate_signals(
         signals_generated=len(signals),
         signals=signals,
     )
+
+
+# ── Bull/Bear/Judge debate ────────────────────────────────────
+
+class DebateResponse(BaseModel):
+    symbol: str
+    bull_case: str
+    bear_case: str
+    verdict: str
+    risk_level: str
+    risk_reasoning: str
+    suggested_entry: str
+    suggested_stop_loss: str
+    suggested_take_profit: str
+    evidence_summary: dict
+    data_sources_used: list[str] = ["price history", "news sentiment", "congressional trading"]
+    data_sources_not_used: list[str] = ["institutional 13F filings (not yet integrated)"]
+
+
+@router.post("/debate/{instrument_id}", response_model=DebateResponse)
+async def run_debate_endpoint(
+    instrument_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Run the Bull/Bear/Judge agent debate for an instrument.
+
+    Uses recent price action, news + sentiment, and congressional trading
+    activity as evidence. Requires a reachable local LLM (Ollama) — if it's
+    unavailable, the response will say so in the verdict rather than fail.
+    """
+    from packages.agents.debate import run_debate
+
+    try:
+        result = await run_debate(db, instrument_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return DebateResponse(
+        symbol=result.symbol,
+        bull_case=result.bull_case,
+        bear_case=result.bear_case,
+        verdict=result.verdict,
+        risk_level=result.risk_level,
+        risk_reasoning=result.risk_reasoning,
+        suggested_entry=result.suggested_entry,
+        suggested_stop_loss=result.suggested_stop_loss,
+        suggested_take_profit=result.suggested_take_profit,
+        evidence_summary=result.evidence_summary,
+    )
+
+
+# ── Consolidated final verdict ──────────────────────────────
+
+class ConsolidatedResponse(BaseModel):
+    symbol: str
+    final_state: str
+    final_confidence: float
+    summary: str
+    entry_zone: str
+    stop_loss: str
+    take_profit: str
+    risk_level: str
+    risk_reasoning: str
+    strategy_breakdown: list[dict]
+    llm_used: bool
+
+
+@router.post("/consolidated/{instrument_id}", response_model=ConsolidatedResponse)
+async def run_consolidated_endpoint(
+    instrument_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """One final verdict combining all technical strategies + the news/congress
+    debate, synthesized by an LLM 'chief analyst' pass. Falls back to a
+    deterministic vote if the LLM is unreachable.
+    """
+    from packages.agents.consolidate import run_consolidated_analysis
+
+    try:
+        result = await run_consolidated_analysis(db, instrument_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return ConsolidatedResponse(
+        symbol=result.symbol,
+        final_state=result.final_state,
+        final_confidence=result.final_confidence,
+        summary=result.summary,
+        entry_zone=result.entry_zone,
+        stop_loss=result.stop_loss,
+        take_profit=result.take_profit,
+        risk_level=result.risk_level,
+        risk_reasoning=result.risk_reasoning,
+        strategy_breakdown=result.strategy_breakdown,
+        llm_used=result.llm_used,
+    )

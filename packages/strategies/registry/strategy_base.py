@@ -64,6 +64,7 @@ class RawSignal:
     invalidation_rule: str = ""
     invalidation_level: Optional[Decimal] = None
     target_method: str = ""
+    target_price: "Decimal | None" = None
     reason_codes: list[str] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)
 
@@ -141,8 +142,17 @@ class StrategyRegistry:
 
     @classmethod
     def create(cls, name: str) -> Optional[Strategy]:
-        """Instantiate a strategy by name."""
+        """Instantiate a strategy by class name or display name."""
         strategy_cls = cls._strategies.get(name)
         if strategy_cls:
             return strategy_cls()
+
+        # Fallback: match by the strategy's display name (metadata.name)
+        for cls_ in cls._strategies.values():
+            try:
+                instance = cls_()
+                if instance.metadata.name == name:
+                    return instance
+            except Exception:
+                continue
         return None

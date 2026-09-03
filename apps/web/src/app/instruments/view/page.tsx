@@ -48,6 +48,23 @@ export default function InstrumentWorkspacePage() {
     "sma_50",
   ]);
   const [limit, setLimit] = useState(200);
+  const [debate, setDebate] = useState<any>(null);
+  const [loadingDebate, setLoadingDebate] = useState(false);
+  const [debateError, setDebateError] = useState("");
+
+  const runDebate = async () => {
+    setLoadingDebate(true);
+    setDebateError("");
+    try {
+      const { signals } = await import("@/lib/api");
+      const result = await signals.consolidated(instrumentId);
+      setDebate(result);
+    } catch (err) {
+      setDebateError("Analysis failed — check that the local LLM is running.");
+    } finally {
+      setLoadingDebate(false);
+    }
+  };
 
   const { data: instrument, isLoading: loadingInstrument } =
     useInstrument(instrumentId);
@@ -346,6 +363,111 @@ export default function InstrumentWorkspacePage() {
               </div>
             </Card>
           )}
+
+          {/* Consolidated Final Verdict */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Final Verdict</CardTitle>
+            </CardHeader>
+            <p className="text-xs text-surface-500 mb-3">
+              Combines all 7 technical strategies plus news and congressional
+              trading context into one recommendation.
+            </p>
+            <button
+              onClick={runDebate}
+              disabled={loadingDebate}
+              className="w-full mb-3 px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              {loadingDebate ? "Analyzing everything... (can take a few minutes)" : "Run Analysis"}
+            </button>
+            {debateError && (
+              <p className="text-sm text-danger-600">{debateError}</p>
+            )}
+            {debate && (
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      debate.final_state === "ENTER_LONG"
+                        ? "bg-green-50 text-success-600"
+                        : debate.final_state === "EXIT"
+                        ? "bg-red-50 text-danger-600"
+                        : debate.final_state === "REDUCE"
+                        ? "bg-amber-50 text-warning-600"
+                        : "bg-surface-100 text-surface-700"
+                    }`}
+                  >
+                    {debate.final_state?.replace("_", " ")}
+                  </span>
+                  <span className="text-xs text-surface-500">
+                    {Math.round(debate.final_confidence)}% confidence
+                  </span>
+                  {!debate.llm_used && (
+                    <span className="text-xs text-warning-600">
+                      (LLM unavailable — mechanical vote only)
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-surface-700">{debate.summary}</p>
+
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-surface-900">Risk:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      debate.risk_level === "LOW"
+                        ? "bg-green-50 text-success-600"
+                        : debate.risk_level === "HIGH"
+                        ? "bg-red-50 text-danger-600"
+                        : "bg-amber-50 text-warning-600"
+                    }`}
+                  >
+                    {debate.risk_level}
+                  </span>
+                </div>
+                <p className="text-surface-500 text-xs">{debate.risk_reasoning}</p>
+
+                <div className="grid grid-cols-1 gap-2 pt-2 border-t border-surface-200">
+                  <div>
+                    <p className="font-medium text-surface-900 mb-1">Entry</p>
+                    <p className="text-surface-700">{debate.entry_zone}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-danger-600 mb-1">Stop-Loss</p>
+                    <p className="text-surface-700">{debate.stop_loss}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-success-600 mb-1">Take-Profit</p>
+                    <p className="text-surface-700">{debate.take_profit}</p>
+                  </div>
+                </div>
+
+                {debate.strategy_breakdown?.length > 0 && (
+                  <div className="pt-2 border-t border-surface-200">
+                    <p className="font-medium text-surface-900 mb-1.5">
+                      Strategy breakdown ({debate.strategy_breakdown.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {debate.strategy_breakdown.map((s: any, idx: number) => (
+                        <span
+                          key={idx}
+                          className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700"
+                        >
+                          {s.strategy}: {s.state}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-surface-400 text-xs pt-2 border-t border-surface-200">
+                  Synthesizes technical strategies, recent news, and congressional
+                  trading activity. Does not yet include institutional 13F filings.
+                  This is reasoning over available evidence, not a statistical forecast.
+                </p>
+              </div>
+            )}
+          </Card>
         </div>
       </div>
     </div>

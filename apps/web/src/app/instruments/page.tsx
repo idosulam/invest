@@ -7,9 +7,8 @@ import { Card } from "@/components/ui/Card";
 import { Header } from "@/components/layout/Header";
 import { useInstruments } from "@/hooks/useApi";
 import type { Instrument } from "@/types";
-
+import { instruments as instrumentsApi } from "@/lib/api";
 const TYPES = ["", "STOCK", "ETF", "BENCHMARK", "INDEX"];
-
 export default function InstrumentsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -29,6 +28,20 @@ export default function InstrumentsPage() {
     type: typeFilter || undefined,
   });
 
+  const handleDelete = async (id: string, symbol: string) => {
+    if (
+      !confirm(`Delete ${symbol}? This will also remove all its price data.`)
+    ) {
+      return;
+    }
+    try {
+      await instrumentsApi.remove(id);
+      mutate(); // refresh the list
+    } catch (err) {
+      alert("Failed to delete instrument. You may need admin permissions.");
+    }
+  };
+
   const instruments: Instrument[] = data?.items ?? [];
   const total: number = data?.total ?? 0;
   const totalPages = Math.ceil(total / 50);
@@ -40,32 +53,6 @@ export default function InstrumentsPage() {
         subtitle={`${total} instruments tracked`}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={async () => {
-                setFetchingData(true);
-                try {
-                  const token = localStorage.getItem("token");
-                  const res = await fetch("/api/v1/admin/ingest", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({ symbols: ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"], timeframe: "1D" }),
-                  });
-                  if (res.ok) {
-                    const d = await res.json();
-                    setMessage(`Fetched data: ${d.inserted} bars inserted`);
-                    setTimeout(() => setMessage(""), 5000);
-                  }
-                } catch (e) { console.error(e); }
-                finally { setFetchingData(false); }
-              }}
-              disabled={fetchingData}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-surface-200 rounded-lg hover:bg-surface-50 disabled:opacity-50"
-            >
-              {fetchingData ? "Fetching..." : "Fetch Sample Data"}
-            </button>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
@@ -89,7 +76,9 @@ export default function InstrumentsPage() {
         <Card className="mb-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
-              <label className="block text-xs font-medium text-surface-700 mb-1">Symbol</label>
+              <label className="block text-xs font-medium text-surface-700 mb-1">
+                Symbol
+              </label>
               <input
                 type="text"
                 value={addSymbol}
@@ -99,7 +88,9 @@ export default function InstrumentsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-surface-700 mb-1">Name</label>
+              <label className="block text-xs font-medium text-surface-700 mb-1">
+                Name
+              </label>
               <input
                 type="text"
                 value={addName}
@@ -109,7 +100,9 @@ export default function InstrumentsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-surface-700 mb-1">Type</label>
+              <label className="block text-xs font-medium text-surface-700 mb-1">
+                Type
+              </label>
               <select
                 value={addType}
                 onChange={(e) => setAddType(e.target.value)}
@@ -133,7 +126,11 @@ export default function InstrumentsPage() {
                         "Content-Type": "application/json",
                         ...(token ? { Authorization: `Bearer ${token}` } : {}),
                       },
-                      body: JSON.stringify({ symbol: addSymbol, name: addName, type: addType }),
+                      body: JSON.stringify({
+                        symbol: addSymbol,
+                        name: addName,
+                        type: addType,
+                      }),
                     });
                     if (res.ok) {
                       setAddSymbol("");
@@ -141,8 +138,11 @@ export default function InstrumentsPage() {
                       setShowAddForm(false);
                       mutate();
                     }
-                  } catch (e) { console.error(e); }
-                  finally { setAdding(false); }
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setAdding(false);
+                  }
                 }}
                 disabled={adding || !addSymbol || !addName}
                 className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
@@ -171,7 +171,10 @@ export default function InstrumentsPage() {
               type="text"
               placeholder="Search by symbol or name..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="w-full pl-10 pr-4 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
@@ -180,7 +183,10 @@ export default function InstrumentsPage() {
             <Filter className="w-4 h-4 text-surface-200" />
             <select
               value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setPage(1);
+              }}
               className="text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All Types</option>
@@ -204,7 +210,9 @@ export default function InstrumentsPage() {
             <Search className="w-10 h-10 mb-2 text-surface-200" />
             <p>No instruments found</p>
             {search && (
-              <p className="text-sm text-surface-200 mt-1">Try a different search term</p>
+              <p className="text-sm text-surface-200 mt-1">
+                Try a different search term
+              </p>
             )}
           </div>
         ) : (
@@ -213,13 +221,27 @@ export default function InstrumentsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-200">
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Symbol</th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Name</th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Type</th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Exchange</th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Sector</th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Currency</th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">Status</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Symbol
+                    </th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Name
+                    </th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Type
+                    </th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Exchange
+                    </th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Sector
+                    </th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Currency
+                    </th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-700">
+                      Status
+                    </th>
                     <th className="text-right py-2 px-3 font-medium text-surface-700"></th>
                   </tr>
                 </thead>
@@ -245,31 +267,41 @@ export default function InstrumentsPage() {
                           {inst.type}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-surface-700">{inst.exchange ?? "—"}</td>
+                      <td className="py-2.5 px-3 text-surface-700">
+                        {inst.exchange ?? "—"}
+                      </td>
                       <td className="py-2.5 px-3 text-surface-700 max-w-[150px] truncate">
                         {inst.sector ?? "—"}
                       </td>
-                      <td className="py-2.5 px-3 text-surface-700">{inst.currency}</td>
+                      <td className="py-2.5 px-3 text-surface-700">
+                        {inst.currency}
+                      </td>
                       <td className="py-2.5 px-3">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                             inst.status === "ACTIVE"
                               ? "bg-green-50 text-success-600"
                               : inst.status === "DELISTED"
-                              ? "bg-red-50 text-danger-600"
-                              : "bg-amber-50 text-warning-600"
+                                ? "bg-red-50 text-danger-600"
+                                : "bg-amber-50 text-warning-600"
                           }`}
                         >
                           {inst.status}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-right">
+                      <td className="py-2.5 px-3 text-right space-x-3">
                         <Link
                           href={`/instruments/view?id=${inst.id}`}
                           className="text-primary-600 hover:text-primary-700 text-xs font-medium"
                         >
                           Open →
                         </Link>
+                        <button
+                          onClick={() => handleDelete(inst.id, inst.symbol)}
+                          className="text-danger-600 hover:text-danger-700 text-xs font-medium"
+                        >
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   ))}

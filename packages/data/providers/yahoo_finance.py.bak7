@@ -163,7 +163,7 @@ class YahooFinanceProvider:
                     "dividendYield": ("dividend_yield", "ratio"),
                     "beta": ("beta", "ratio"),
                     "trailingEps": ("eps_ttm", "USD"),
-                    "forwardEps": ("eps_forward", "USD"),
+                    "forward_eps": ("eps_forward", "USD"),
                     "revenue": ("revenue", "USD"),
                     "totalRevenue": ("revenue", "USD"),
                     "profitMargins": ("profit_margin", "ratio"),

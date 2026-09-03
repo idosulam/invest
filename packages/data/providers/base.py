@@ -102,6 +102,27 @@ class FundamentalRequest:
 
 
 @dataclass
+class NewsRecord:
+    """A news article linked to a symbol, with sentiment."""
+    symbol: str
+    title: str
+    summary: str
+    source: str
+    url: str
+    published_at: datetime
+    sentiment_score: Optional[Decimal] = None  # -1 (very bearish) to +1 (very bullish)
+    sentiment_label: Optional[str] = None       # e.g. "Bullish", "Neutral", "Bearish"
+    relevance_score: Optional[Decimal] = None   # 0 to 1, how relevant to this symbol
+
+
+@dataclass
+class NewsRequest:
+    """Request for news articles."""
+    symbols: list[str]
+    limit: int = 20
+
+
+@dataclass
 class ProviderHealth:
     """Health status of a data provider."""
     name: str

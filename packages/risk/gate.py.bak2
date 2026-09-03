@@ -94,8 +94,7 @@ class RiskGate:
 
         # 2. Data freshness
         if last_bar_ts:
-            now = datetime.now(timezone.utc) if last_bar_ts.tzinfo is not None else datetime.utcnow()
-            age = now - last_bar_ts
+            age = datetime.utcnow() - last_bar_ts
             if age > self.max_staleness:
                 blockers.append(f"Data stale: {age.days}d {age.seconds // 3600}h old")
                 confidence *= 0.5
