@@ -294,6 +294,224 @@ def run_sma_crossover_backtest(
     return result
 
 
+def _compute_backtest_metrics(
+    trades: list[Trade],
+    equity: list[float],
+    drawdowns: list[float],
+    total_costs: float,
+    config: BacktestConfig,
+    dates,
+    start_idx: int,
+    close_len: int,
+) -> BacktestMetrics:
+    """Shared metrics computation, factored out so every strategy's
+    backtest produces directly comparable numbers the same way."""
+    final_equity = equity[-1] if equity else config.initial_capital
+    total_return = (final_equity - config.initial_capital) / config.initial_capital
+
+    winning = [t for t in trades if t.pnl > 0]
+    losing = [t for t in trades if t.pnl <= 0]
+    win_rate = len(winning) / len(trades) if trades else 0
+    avg_win = np.mean([t.pnl for t in winning]) if winning else 0
+    avg_loss = abs(np.mean([t.pnl for t in losing])) if losing else 1
+    payoff_ratio = avg_win / avg_loss if avg_loss > 0 else 0
+
+    if len(equity) > 1:
+        returns = np.diff(equity) / np.where(np.array(equity[:-1]) == 0, 1, equity[:-1])
+        volatility = np.std(returns) * np.sqrt(252)
+    else:
+        returns = np.array([])
+        volatility = 0
+
+    risk_free = 0.04
+    if volatility > 0 and len(equity) > 0:
+        excess_return = (total_return / len(equity) * 252) - risk_free
+        sharpe = excess_return / volatility
+    else:
+        sharpe = 0
+
+    if len(returns) > 0:
+        downside_returns = returns[returns < 0]
+        downside_vol = np.std(downside_returns) * np.sqrt(252) if len(downside_returns) > 0 else 0
+        sortino = (total_return / len(equity) * 252 - risk_free) / downside_vol if downside_vol > 0 else 0
+    else:
+        sortino = 0
+
+    max_dd = max(drawdowns) if drawdowns else 0
+    calmar = (total_return / len(equity) * 252) / max_dd if max_dd > 0 and len(equity) > 0 else 0
+
+    durations = []
+    for t in trades:
+        if t.entry_date and t.exit_date:
+            try:
+                durations.append((t.exit_date - t.entry_date).days)
+            except TypeError:
+                pass
+    avg_duration = np.mean(durations) if durations else 0
+
+    return BacktestMetrics(
+        total_return=round(total_return * 100, 2),
+        annualized_return=round(total_return / len(equity) * 252 * 100, 2) if len(equity) > 0 else 0,
+        volatility=round(volatility * 100, 2),
+        sharpe_ratio=round(sharpe, 2),
+        sortino_ratio=round(sortino, 2),
+        max_drawdown=round(max_dd * 100, 2),
+        calmar_ratio=round(calmar, 2),
+        win_rate=round(win_rate * 100, 1),
+        payoff_ratio=round(payoff_ratio, 2),
+        total_trades=len(trades),
+        avg_trade_duration_days=round(avg_duration, 1),
+        exposure_pct=round(100, 1),
+        turnover=round(len(trades) * 2, 1),
+        total_costs=round(total_costs, 2),
+    )
+
+
+def run_obv_backtest(
+    bars: pd.DataFrame,
+    lookback: int = 20,
+    config: Optional[BacktestConfig] = None,
+) -> BacktestResult:
+    """Backtest the OBV Trend & Divergence strategy's exact entry/exit rules:
+    enter on bullish divergence (price at a low, OBV rising), exit on
+    bearish divergence (price at a high, OBV falling).
+    """
+    if config is None:
+        config = BacktestConfig()
+
+    result = BacktestResult(strategy_name="OBV Trend & Divergence", config=config)
+
+    try:
+        close = bars["close"].values
+        volume = bars["volume"].values
+        dates = bars["ts_open"].values if "ts_open" in bars.columns else range(len(bars))
+
+        min_bars = lookback + 5
+        if len(close) < min_bars:
+            result.error = f"Need at least {min_bars} bars, got {len(close)}"
+            return result
+
+        direction = np.sign(np.diff(close, prepend=close[0]))
+        direction[0] = 0
+        obv = np.cumsum(volume * direction)
+
+        capital = config.initial_capital
+        position = 0.0
+        entry_price = 0.0
+        entry_date = None
+        trades = []
+        equity = []
+        peak_equity = capital
+        drawdowns = []
+        total_costs = 0.0
+
+        for i in range(lookback, len(close)):
+            price = close[i]
+            date = dates[i] if hasattr(dates[i], "hour") else datetime.utcnow()
+
+            current_equity = capital + (position * price if position > 0 else 0)
+            equity.append(current_equity)
+            peak_equity = max(peak_equity, current_equity)
+            dd = (peak_equity - current_equity) / peak_equity if peak_equity > 0 else 0
+            drawdowns.append(dd)
+
+            window_close = close[i - lookback + 1: i + 1]
+            window_obv = obv[i - lookback + 1: i + 1]
+
+            price_low_idx = int(np.argmin(window_close))
+            price_high_idx = int(np.argmax(window_close))
+            price_low = window_close[price_low_idx]
+            price_high = window_close[price_high_idx]
+            obv_at_low = window_obv[price_low_idx]
+            obv_at_high = window_obv[price_high_idx]
+            curr_obv = window_obv[-1]
+            prev_price = close[i - 1] if i > 0 else price
+
+            near_low = price <= price_low * 1.02
+            bullish_div = near_low and curr_obv > obv_at_low and price < prev_price * 1.0
+
+            near_high = price >= price_high * 0.98
+            bearish_div = near_high and curr_obv < obv_at_high
+
+            if position == 0 and bullish_div:
+                invest_amount = capital * config.position_size_pct
+                commission = invest_amount * config.commission_pct
+                slippage = invest_amount * config.slippage_pct
+                total_cost = commission + slippage
+                total_costs += total_cost
+
+                quantity = (invest_amount - total_cost) / price
+                position = quantity
+                entry_price = price
+                entry_date = date
+                capital -= invest_amount
+
+            elif position > 0 and bearish_div:
+                exit_value = position * price
+                commission = exit_value * config.commission_pct
+                slippage = exit_value * config.slippage_pct
+                total_cost = commission + slippage
+                total_costs += total_cost
+
+                net_exit = exit_value - total_cost
+                pnl = net_exit - (position * entry_price)
+                pnl_pct = pnl / (position * entry_price) if entry_price > 0 else 0
+
+                trades.append(Trade(
+                    entry_date=entry_date,
+                    exit_date=date,
+                    side="LONG",
+                    entry_price=entry_price,
+                    exit_price=price,
+                    quantity=position,
+                    pnl=pnl,
+                    pnl_pct=pnl_pct,
+                    fees=total_cost,
+                ))
+                capital += net_exit
+                position = 0.0
+
+        if position > 0:
+            last_price = close[-1]
+            exit_value = position * last_price
+            commission = exit_value * config.commission_pct
+            slippage = exit_value * config.slippage_pct
+            total_cost = commission + slippage
+            total_costs += total_cost
+
+            net_exit = exit_value - total_cost
+            pnl = net_exit - (position * entry_price)
+            pnl_pct = pnl / (position * entry_price) if entry_price > 0 else 0
+
+            trades.append(Trade(
+                entry_date=entry_date,
+                exit_date=datetime.utcnow(),
+                side="LONG",
+                entry_price=entry_price,
+                exit_price=last_price,
+                quantity=position,
+                pnl=pnl,
+                pnl_pct=pnl_pct,
+                fees=total_cost,
+            ))
+            capital += net_exit
+            position = 0.0
+
+        result.metrics = _compute_backtest_metrics(
+            trades, equity, drawdowns, total_costs, config, dates, lookback, len(close)
+        )
+        result.trades = trades
+        result.equity_curve = [round(e, 2) for e in equity]
+        result.drawdown_curve = [round(d * 100, 2) for d in drawdowns]
+        result.timestamps = [dates[i] if hasattr(dates[i], "hour") else datetime.utcnow() for i in range(lookback, len(close))]
+        result.completed_at = datetime.utcnow()
+
+    except Exception as e:
+        result.error = str(e)
+
+    return result
+
+
 def run_rsi_backtest(
     bars: pd.DataFrame,
     rsi_period: int = 14,
