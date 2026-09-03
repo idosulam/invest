@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Search, Plus, Filter } from "lucide-react";
+import { Search, Plus, Filter, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Header } from "@/components/layout/Header";
 import { useInstruments } from "@/hooks/useApi";
@@ -19,6 +19,7 @@ export default function InstrumentsPage() {
   const [addType, setAddType] = useState("STOCK");
   const [adding, setAdding] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState("");
 
   const { data, isLoading, mutate } = useInstruments({
@@ -53,6 +54,35 @@ export default function InstrumentsPage() {
         subtitle={`${total} instruments tracked`}
         actions={
           <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                setMessage("");
+                try {
+                  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+                  const res = await fetch("/api/v1/data/refresh/all", {
+                    method: "POST",
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setMessage(`Data refreshed: ${data.total_inserted} inserted, ${data.total_updated} updated across ${data.symbols_processed} symbols`);
+                    mutate();
+                  } else {
+                    setMessage("Refresh failed — check server logs");
+                  }
+                } catch (e) {
+                  setMessage("Refresh failed — is the API running?");
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-700 bg-surface-100 rounded-lg hover:bg-surface-200 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh Data"}
+            </button>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"

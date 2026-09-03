@@ -25,6 +25,7 @@ from packages.data.providers.yahoo_finance import YahooFinanceProvider
 from packages.data.providers.sec_edgar import SECEdgarProvider
 from packages.data.quality.validator import DataValidator
 from packages.data.normalization.normalizer import DataNormalizer
+from packages.data.ingestion.pipeline import IngestionPipeline
 from packages.domain.enums.common import Timeframe
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,14 @@ class FetchBarsRequest(BaseModel):
     timeframe: str = "1D"
     start: Optional[str] = None  # YYYY-MM-DD
     end: Optional[str] = None    # YYYY-MM-DD
+
+
+class RefreshResult(BaseModel):
+    status: str
+    symbols_processed: int
+    total_inserted: int
+    total_updated: int
+    errors: list[str]
 
 
 class BarResponse(BaseModel):
@@ -226,3 +235,71 @@ async def check_provider_health(
             error=h.error_message,
         ))
     return results
+
+
+# ── Data Refresh (fetch + store) ─────────────────────────────
+
+@router.post("/refresh", response_model=RefreshResult)
+async def refresh_data(
+    symbols: Optional[list[str]] = None,
+    timeframe: str = "1D",
+    _user: Any = Depends(require_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch latest bars from Yahoo Finance AND store them in the database.
+
+    If no symbols provided, refreshes all active instruments.
+    This is the endpoint to use when charts show stale data.
+    """
+    from sqlalchemy import select
+    from packages.domain.entities.models import Instrument
+
+    timeframe_map = {
+        "1D": Timeframe.DAILY,
+        "1H": Timeframe.HOURLY,
+        "15m": Timeframe.MINUTE_15,
+        "5m": Timeframe.MINUTE_5,
+        "1m": Timeframe.MINUTE_1,
+    }
+    tf = timeframe_map.get(timeframe, Timeframe.DAILY)
+
+    # If no symbols provided, get all active instruments
+    if not symbols:
+        result = await db.execute(
+            select(Instrument.symbol).where(Instrument.status == "ACTIVE")
+        )
+        symbols = [row[0] for row in result.all()]
+
+    if not symbols:
+        return RefreshResult(
+            status="skipped",
+            symbols_processed=0,
+            total_inserted=0,
+            total_updated=0,
+            errors=["No symbols to refresh"],
+        )
+
+    pipeline = IngestionPipeline(yahoo)
+    ingest_result = await pipeline.ingest_bars(db, symbols, tf)
+    await db.commit()
+
+    return RefreshResult(
+        status=ingest_result.status,
+        symbols_processed=len(symbols),
+        total_inserted=ingest_result.rows_inserted,
+        total_updated=ingest_result.rows_updated,
+        errors=ingest_result.errors,
+    )
+
+
+@router.post("/refresh/all", response_model=RefreshResult)
+async def refresh_all_data(
+    _user: Any = Depends(require_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    """Refresh daily bars for ALL active instruments.
+
+    Convenience endpoint — equivalent to POST /data/refresh with no symbols.
+    Use this when the entire platform shows stale data.
+    """
+    return await refresh_data(symbols=None, timeframe="1D", _user=_user, db=db)
