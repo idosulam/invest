@@ -35,7 +35,7 @@ export default function DiscoverPage() {
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [analysisError, setAnalysisError] = useState("");
-  const [navigatingSymbol, setNavigatingSymbol] = useState<string | null>(null);
+
 
   const runDiscovery = async (screenerValue: string) => {
     setLoading(true);
@@ -72,32 +72,8 @@ export default function DiscoverPage() {
     }
   };
 
-  const handleOpenChart = async (result: DiscoveryResult) => {
-    setNavigatingSymbol(result.symbol);
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      try {
-        const createRes = await instrumentsApi.create({
-          symbol: result.symbol,
-          name: result.name || result.symbol,
-          type: "STOCK",
-          currency: "USD",
-        });
-        window.location.href = `/instruments/view?id=${createRes.id}`;
-      } catch {
-        const searchRes = await fetch(`/api/v1/instruments?search=${result.symbol}&page_size=1`, { headers: authHeader });
-        if (searchRes.ok) {
-          const data = await searchRes.json();
-          const id = data.items?.[0]?.id;
-          if (id) window.location.href = `/instruments/view?id=${id}`;
-        }
-      }
-    } catch (err) {
-      alert(`Failed to open ${result.symbol}`);
-    } finally {
-      setNavigatingSymbol(null);
-    }
+  const handleOpenChart = (result: DiscoveryResult) => {
+    window.location.href = `/instruments/view?symbol=${result.symbol}`;
   };
 
   const handleAnalyze = async (result: DiscoveryResult) => {
@@ -217,7 +193,7 @@ export default function DiscoverPage() {
                       onClick={() => handleOpenChart(r)}
                     >
                       <td className="py-2.5 px-3 font-semibold text-primary-600">
-                        {navigatingSymbol === r.symbol ? <Loader2 className="w-4 h-4 animate-spin inline" /> : r.symbol}
+                        {r.symbol}
                       </td>
                       <td className="py-2.5 px-3 text-surface-900">{r.name ?? "—"}</td>
                       <td className="py-2.5 px-3 text-right font-mono">

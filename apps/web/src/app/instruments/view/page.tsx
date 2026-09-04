@@ -40,7 +40,40 @@ const INDICATOR_PRESETS = [
 
 export default function InstrumentWorkspacePage() {
   const searchParams = useSearchParams();
-  const instrumentId = searchParams.get("id") as string;
+  const paramId = searchParams.get("id");
+  const paramSymbol = searchParams.get("symbol");
+
+  const [resolvedId, setResolvedId] = useState<string | null>(paramId);
+  const [resolving, setResolving] = useState(!paramId && !!paramSymbol);
+
+  // If ?symbol= is provided instead of ?id=, resolve to instrument ID
+  useState(() => {
+    if (!paramId && paramSymbol) {
+      setResolving(true);
+      fetch(`/api/v1/instruments?search=${encodeURIComponent(paramSymbol)}&page_size=1`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.items?.length > 0) {
+            setResolvedId(data.items[0].id);
+          } else {
+            // Instrument doesn't exist — create it then redirect
+            return fetch(`/api/v1/instruments`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symbol: paramSymbol.toUpperCase(), name: paramSymbol.toUpperCase(), type: "STOCK", currency: "USD" }),
+            })
+              .then((r) => r.ok ? r.json() : null)
+              .then((created) => {
+                if (created?.id) setResolvedId(created.id);
+              });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setResolving(false));
+    }
+  });
+
+  const instrumentId = resolvedId;
 
   const [timeframe, setTimeframe] = useState("1D");
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([
@@ -68,6 +101,18 @@ export default function InstrumentWorkspacePage() {
 
   const { data: instrument, isLoading: loadingInstrument } =
     useInstrument(instrumentId);
+
+  if (resolving) {
+    return (
+      <div>
+        <div className="h-16 animate-pulse bg-surface-100 rounded-lg mb-6" />
+        <div className="h-[400px] flex items-center justify-center text-surface-700">
+          <BarChart3 className="w-10 h-10 mb-2 text-surface-200 animate-pulse" />
+          <p>Resolving {paramSymbol}...</p>
+        </div>
+      </div>
+    );
+  }
   const { data: chartData, isLoading: loadingChart } = useChartData(
     instrumentId,
     {
