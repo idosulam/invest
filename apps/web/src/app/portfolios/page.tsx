@@ -461,8 +461,9 @@ function IBKRImportModal({
     <Modal title="Import from IBKR" onClose={onClose}>
       <div className="space-y-4">
         <p className="text-sm text-surface-700">
-          Paste your IBKR activity statement CSV or upload a file. The importer
-          reads Symbol, Quantity, and Cost Basis columns.
+          Paste your IBKR Activity Statement CSV or upload a file. The importer
+          automatically detects the format — both IBKR Activity Statements
+          (Open Positions section) and simple CSV (Symbol, Quantity, Cost Basis) work.
         </p>
 
         <div>
@@ -484,7 +485,13 @@ function IBKRImportModal({
           <textarea
             value={csvData}
             onChange={(e) => setCsvData(e.target.value)}
-            placeholder={`Symbol,Quantity,Cost Basis\nAAPL,100,185.50\nMSFT,50,420.00\nSPY,200,540.00`}
+            placeholder={`IBKR Activity Statement format:
+Open Positions,Data,Summary,Stocks,USD,AAPL,3,1,328.21,984.63,
+Open Positions,Data,Summary,Stocks,USD,NVDA,13.452,1,228.45,3073.11,
+
+Or simple CSV:
+Symbol,Quantity,Cost Basis
+AAPL,100,185.50`}
             rows={8}
             className="w-full text-sm font-mono border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />

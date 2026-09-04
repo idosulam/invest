@@ -639,9 +639,9 @@ async def import_ibkr(
 ):
     """Import positions from an IBKR activity statement CSV.
 
-    Expects the CSV to have columns like: Symbol, Quantity, Cost Basis, ...
-    IBKR CSV formats vary by statement type — this handles the most common
-    "Positions" section of the activity statement.
+    Handles both:
+    - IBKR Activity Statement format (Open Positions section)
+    - Simple CSV with Symbol, Quantity, Cost Basis columns
     """
     import csv
     import io
@@ -656,59 +656,109 @@ async def import_ibkr(
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
-    # Parse CSV
-    reader = csv.DictReader(io.StringIO(req.csv_data))
+    lines = req.csv_data.strip().splitlines()
     imported = []
     errors = []
 
-    for row in reader:
-        try:
-            # IBKR CSV column names (common variants)
-            symbol = (
-                row.get("Symbol") or row.get("symbol") or
-                row.get("Ticker") or row.get("ticker") or ""
-            ).strip()
-            if not symbol:
+    # ── Detect format: IBKR Activity Statement vs simple CSV ──
+    is_ibkr_activity = any("Open Positions" in line for line in lines[:20])
+
+    if is_ibkr_activity:
+        # Parse IBKR Activity Statement format
+        # Lines look like:
+        # Open Positions,Data,Summary,Stocks,USD,AAPL,3,1,328.21,984.63,
+        # Columns: Section, Type, Discriminator, AssetCategory, Currency, Symbol, Quantity, Mult, ClosePrice, Value, Code
+        for line in lines:
+            parts = [p.strip().strip('"') for p in line.split(",")]
+            if len(parts) < 10:
+                continue
+            if parts[0] != "Open Positions" or parts[1] != "Data":
+                continue
+            if parts[2] == "Total":
                 continue
 
-            qty_str = (
-                row.get("Quantity") or row.get("quantity") or
-                row.get("Position") or row.get("position") or "0"
-            ).strip()
-            cost_str = (
-                row.get("Cost Basis") or row.get("Cost Price") or
-                row.get("Avg Cost") or row.get("avg_cost") or
-                row.get("cost_basis") or "0"
-            ).strip()
-            price_str = (
-                row.get("Close Price") or row.get("Market Price") or
-                row.get("Current Price") or row.get("price") or "0"
-            ).strip()
+            try:
+                symbol = parts[5].strip()
+                qty_str = parts[6].strip()
+                price_str = parts[8].strip()
 
-            qty = float(qty_str.replace(",", "").replace("+", ""))
-            cost = float(cost_str.replace(",", ""))
-            price = float(price_str.replace(",", "")) if price_str and price_str != "0" else None
+                if not symbol or not qty_str:
+                    continue
 
-            if qty <= 0:
-                continue
+                qty = float(qty_str.replace(",", ""))
+                price = float(price_str.replace(",", "")) if price_str else 0
 
-            instrument = await _get_or_create_instrument(db, symbol)
-            current_price = price or await _fetch_current_price(symbol)
+                if qty <= 0:
+                    continue
 
-            position = await _upsert_position(
-                db, portfolio_id, instrument.id,
-                quantity=qty, avg_cost=cost if cost > 0 else (current_price or 0),
-            )
+                instrument = await _get_or_create_instrument(db, symbol)
+                current_price = await _fetch_current_price(symbol) or price
 
-            imported.append({
-                "symbol": symbol,
-                "quantity": qty,
-                "avg_cost": cost,
-                "current_price": current_price,
-            })
-        except Exception as e:
-            symbol = row.get("Symbol", row.get("symbol", "?"))
-            errors.append({"symbol": symbol, "error": str(e)})
+                position = await _upsert_position(
+                    db, portfolio_id, instrument.id,
+                    quantity=qty,
+                    avg_cost=price if price > 0 else current_price,
+                )
+
+                imported.append({
+                    "symbol": symbol,
+                    "quantity": qty,
+                    "avg_cost": price,
+                    "current_price": current_price,
+                })
+            except Exception as e:
+                errors.append({"symbol": parts[5] if len(parts) > 5 else "?", "error": str(e)})
+
+    else:
+        # Parse simple CSV format (Symbol, Quantity, Cost Basis, ...)
+        reader = csv.DictReader(io.StringIO(req.csv_data))
+        for row in reader:
+            try:
+                symbol = (
+                    row.get("Symbol") or row.get("symbol") or
+                    row.get("Ticker") or row.get("ticker") or ""
+                ).strip()
+                if not symbol:
+                    continue
+
+                qty_str = (
+                    row.get("Quantity") or row.get("quantity") or
+                    row.get("Position") or row.get("position") or "0"
+                ).strip()
+                cost_str = (
+                    row.get("Cost Basis") or row.get("Cost Price") or
+                    row.get("Avg Cost") or row.get("avg_cost") or
+                    row.get("cost_basis") or "0"
+                ).strip()
+                price_str = (
+                    row.get("Close Price") or row.get("Market Price") or
+                    row.get("Current Price") or row.get("price") or "0"
+                ).strip()
+
+                qty = float(qty_str.replace(",", "").replace("+", ""))
+                cost = float(cost_str.replace(",", ""))
+                price = float(price_str.replace(",", "")) if price_str and price_str != "0" else None
+
+                if qty <= 0:
+                    continue
+
+                instrument = await _get_or_create_instrument(db, symbol)
+                current_price = price or await _fetch_current_price(symbol)
+
+                position = await _upsert_position(
+                    db, portfolio_id, instrument.id,
+                    quantity=qty, avg_cost=cost if cost > 0 else (current_price or 0),
+                )
+
+                imported.append({
+                    "symbol": symbol,
+                    "quantity": qty,
+                    "avg_cost": cost,
+                    "current_price": current_price,
+                })
+            except Exception as e:
+                symbol = row.get("Symbol", row.get("symbol", "?"))
+                errors.append({"symbol": symbol, "error": str(e)})
 
     await db.flush()
 
