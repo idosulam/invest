@@ -364,6 +364,7 @@ async def run_sentiment_endpoint(
 # ── Consolidated final verdict ──────────────────────────────
 
 class ConsolidatedResponse(BaseModel):
+    instrument_id: Optional[str] = None
     symbol: str
     final_state: str
     final_confidence: float
@@ -396,19 +397,21 @@ async def run_consolidated_endpoint(
         raise HTTPException(status_code=404, detail=str(e))
 
     return ConsolidatedResponse(
+        instrument_id=str(instrument_id),
         symbol=result.symbol,
-        final_state=result.final_state.value if hasattr(result.final_state, 'value') else result.final_state,
+        final_state=result.final_state.value,
         final_confidence=result.final_confidence,
         summary=result.summary,
         entry_zone=result.entry_zone,
         stop_loss=result.stop_loss,
         take_profit=result.take_profit,
-        risk_level=result.risk_level.value if hasattr(result.risk_level, 'value') else result.risk_level,
+        risk_level=result.risk_level.value,
         risk_reasoning=result.risk_reasoning,
         strategy_breakdown=result.strategy_breakdown,
         debate_included=result.debate_included,
         llm_used=result.llm_used,
     )
+
 
 
 # ── Decision Memory Log ────────────────────────────────────
