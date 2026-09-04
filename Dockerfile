@@ -23,9 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Python deps — install from lockfile for reproducible builds
-COPY pyproject.toml uv.lock .
-RUN uv pip install --system --no-cache .
+# Python deps — install from pyproject.toml using uv into system Python
+COPY pyproject.toml .
+RUN uv pip install --system --no-cache . 2>&1 || pip install --no-cache-dir .
+
+# Verify uvicorn is installed
+RUN which uvicorn && uvicorn --version
 
 COPY . .
 
