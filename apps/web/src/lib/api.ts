@@ -116,10 +116,51 @@ export const assistant = {
 /* ── Scanner ── */
 
 export const signals = {
-  debate: (instrumentId: string) =>
-    request<any>(`/signals/debate/${instrumentId}`, { method: "POST" }),
+  debate: (instrumentId: string, rounds = 2) =>
+    request<any>(`/signals/debate/${instrumentId}?rounds=${rounds}`, { method: "POST" }),
   consolidated: (instrumentId: string) =>
     request<any>(`/signals/consolidated/${instrumentId}`, { method: "POST" }),
+  sentiment: (instrumentId: string) =>
+    request<any>(`/signals/sentiment/${instrumentId}`, { method: "POST" }),
+  memory: (symbol?: string) => {
+    const qs = symbol ? `?symbol=${symbol}` : "";
+    return request<any>(`/signals/memory${qs}`);
+  },
+  resolveMemory: (symbol?: string, holdingDays = 5) => {
+    const qs = new URLSearchParams();
+    if (symbol) qs.set("symbol", symbol);
+    qs.set("holding_days", String(holdingDays));
+    return request<any>(`/signals/memory/resolve?${qs}`, { method: "POST" });
+  },
+};
+
+/* ── Portfolios ── */
+
+export const portfolios = {
+  list: () => request<any[]>("/portfolios"),
+  get: (id: string) => request<any>(`/portfolios/${id}`),
+  create: (name: string) =>
+    request<any>("/portfolios", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  positions: (id: string) => request<any[]>(`/portfolios/${id}/positions`),
+  analytics: (id: string) => request<any>(`/portfolios/${id}/analytics`),
+  addPosition: (portfolioId: string, data: { symbol: string; quantity: number; avg_cost: number; current_price?: number }) =>
+    request<any>(`/portfolios/${portfolioId}/add-position`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  bulkImport: (portfolioId: string, positions: { symbol: string; quantity: number; avg_cost: number }[]) =>
+    request<any>(`/portfolios/${portfolioId}/bulk-import`, {
+      method: "POST",
+      body: JSON.stringify({ positions }),
+    }),
+  importIBKR: (portfolioId: string, csvData: string) =>
+    request<any>(`/portfolios/${portfolioId}/import-ibkr`, {
+      method: "POST",
+      body: JSON.stringify({ csv_data: csvData }),
+    }),
 };
 
 /* ── Strategies ── */
