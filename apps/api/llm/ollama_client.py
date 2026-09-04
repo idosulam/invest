@@ -18,7 +18,7 @@ class OllamaClient:
         self.model = model or get_settings().llm_model
 
     def chat(self, system: str, user: str, temperature: float = 0.4,
-             timeout: int = 120, format: str | None = None) -> str:
+             timeout: int = 300, format: str | None = None) -> str:
         """Send a single-turn chat request and return the model's text response.
 
         Args:

@@ -216,6 +216,7 @@ async def run_risk_debate(
         client, pm_system, pm_user,
         schema=PortfolioDecision,
         temperature=0.2,
+        max_retries=3,
     )
 
     if decision is None:

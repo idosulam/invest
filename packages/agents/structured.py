@@ -75,7 +75,7 @@ def structured_chat(
     user: str,
     schema: Type[T],
     temperature: float = 0.2,
-    max_retries: int = 2,
+    max_retries: int = 3,
 ) -> T | None:
     """Call the LLM and parse the response into a Pydantic model.
 
