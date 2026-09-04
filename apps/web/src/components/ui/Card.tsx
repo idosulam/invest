@@ -8,13 +8,15 @@ interface CardProps {
   onClick?: () => void;
 }
 
-export function Card({ children, className, padding = "md" }: CardProps) {
+export function Card({ children, className, padding = "md", onClick }: CardProps) {
   const paddings = { sm: "p-3", md: "p-4", lg: "p-6" };
   return (
     <div
+      onClick={onClick}
       className={clsx(
-        "bg-white rounded-xl border border-surface-200 shadow-sm",
+        "bg-surface-800 rounded-xl border border-surface-200 shadow-sm",
         paddings[padding],
+        onClick && "cursor-pointer",
         className,
       )}
     >
@@ -38,5 +40,5 @@ export function CardHeader({
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
-  return <h3 className="text-lg font-semibold text-surface-900">{children}</h3>;
+  return <h3 className="text-lg font-semibold text-white">{children}</h3>;
 }

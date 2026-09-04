@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Compass, TrendingUp, TrendingDown, Plus, Loader2, Check, Sparkles, X } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { Header } from "@/components/layout/Header";
 import { format } from "@/lib/format";
 import { scanner, instruments as instrumentsApi } from "@/lib/api";
@@ -35,6 +36,7 @@ export default function DiscoverPage() {
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [analysisError, setAnalysisError] = useState("");
+  const [modalError, setModalError] = useState<string | null>(null);
 
 
   const runDiscovery = async (screenerValue: string) => {
@@ -66,7 +68,7 @@ export default function DiscoverPage() {
       });
       setAddedSymbols((prev) => new Set(prev).add(result.symbol));
     } catch (err) {
-      alert(`Failed to add ${result.symbol}. It may already exist.`);
+      setModalError(`Failed to add ${result.symbol}. It may already exist.`);
     } finally {
       setAddingSymbol(null);
     }
@@ -365,6 +367,18 @@ export default function DiscoverPage() {
             </details>
           )}
         </Card>
+      )}
+
+      {/* Error Modal */}
+      {modalError && (
+        <ConfirmationModal
+          title="Error"
+          message={modalError}
+          confirmLabel="OK"
+          variant="warning"
+          onConfirm={() => setModalError(null)}
+          onCancel={() => setModalError(null)}
+        />
       )}
     </div>
   );

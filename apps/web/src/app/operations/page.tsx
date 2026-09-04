@@ -58,6 +58,7 @@ export default function OperationsPage() {
   const [loading, setLoading] = useState(true);
   const [ingesting, setIngesting] = useState(false);
   const [ingestSymbols, setIngestSymbols] = useState("AAPL,MSFT,GOOGL,NVDA,TSLA");
+  const [message, setMessage] = useState("");
   const [killSwitch, setKillSwitch] = useState<{ active: boolean; reason: string }>({ active: false, reason: "" });
   const [killReason, setKillReason] = useState("");
 
@@ -95,7 +96,7 @@ export default function OperationsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`Ingestion complete: ${data.inserted} inserted, ${data.updated} updated, ${data.rejected} rejected`);
+        setMessage(`Ingestion complete: ${data.inserted} inserted, ${data.updated} updated, ${data.rejected} rejected`);
         fetchData();
       }
     } catch (e) { console.error(e); }

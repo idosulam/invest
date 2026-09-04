@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { Header } from "@/components/layout/Header";
 import { format } from "@/lib/format";
 
@@ -574,6 +575,7 @@ export default function PortfoliosPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteSymbol, setConfirmDeleteSymbol] = useState<string>("");
 
   useEffect(() => {
     fetchPortfolios();
@@ -648,7 +650,8 @@ export default function PortfoliosPage() {
       if (!res.ok) throw new Error("Failed to delete");
       await refreshPositions();
     } catch (e: any) {
-      alert(e.message || "Failed to delete position");
+      setConfirmDeleteId(null);
+      // Error handled silently — modal closes
     } finally {
       setDeletingId(null);
       setConfirmDeleteId(null);
@@ -893,31 +896,13 @@ export default function PortfoliosPage() {
                           : "—"}
                       </td>
                       <td className="py-2.5 px-3 text-right">
-                        {confirmDeleteId === pos.id ? (
-                          <div className="flex items-center gap-1 justify-end">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); deletePosition(pos.id); }}
-                              disabled={deletingId === pos.id}
-                              className="px-2 py-1 text-xs font-medium text-white bg-danger-600 rounded hover:bg-danger-700 disabled:opacity-50"
-                            >
-                              {deletingId === pos.id ? "..." : "Confirm"}
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
-                              className="px-2 py-1 text-xs text-surface-700 hover:text-surface-900"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(pos.id); }}
-                            className="p-1.5 text-surface-200 hover:text-danger-600 rounded hover:bg-red-50"
-                            title="Delete position"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(pos.id); setConfirmDeleteSymbol(pos.symbol || pos.instrument_name || "this position"); }}
+                          className="p-1.5 text-surface-400 hover:text-danger-500 rounded hover:bg-surface-100"
+                          title="Delete position"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -997,6 +982,19 @@ export default function PortfoliosPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <ConfirmationModal
+          title="Delete Position"
+          message={`Are you sure you want to remove ${confirmDeleteSymbol} from your portfolio? This action cannot be undone.`}
+          confirmLabel="Delete Position"
+          variant="danger"
+          loading={deletingId === confirmDeleteId}
+          onConfirm={() => deletePosition(confirmDeleteId)}
+          onCancel={() => { setConfirmDeleteId(null); setConfirmDeleteSymbol(""); }}
+        />
+      )}
     </div>
   );
 }

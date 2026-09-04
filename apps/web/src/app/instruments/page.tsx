@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, Plus, Filter, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Header } from "@/components/layout/Header";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { useInstruments } from "@/hooks/useApi";
 import type { Instrument } from "@/types";
 import { instruments as instrumentsApi } from "@/lib/api";
@@ -21,6 +22,8 @@ export default function InstrumentsPage() {
   const [fetchingData, setFetchingData] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; symbol: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data, isLoading, mutate } = useInstruments({
     page,
@@ -29,17 +32,17 @@ export default function InstrumentsPage() {
     type: typeFilter || undefined,
   });
 
-  const handleDelete = async (id: string, symbol: string) => {
-    if (
-      !confirm(`Delete ${symbol}? This will also remove all its price data.`)
-    ) {
-      return;
-    }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await instrumentsApi.remove(id);
-      mutate(); // refresh the list
+      await instrumentsApi.remove(deleteTarget.id);
+      mutate();
     } catch (err) {
-      alert("Failed to delete instrument. You may need admin permissions.");
+      // Error handled silently
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -327,8 +330,8 @@ export default function InstrumentsPage() {
                           Open →
                         </Link>
                         <button
-                          onClick={() => handleDelete(inst.id, inst.symbol)}
-                          className="text-danger-600 hover:text-danger-700 text-xs font-medium"
+                          onClick={() => setDeleteTarget({ id: inst.id, symbol: inst.symbol })}
+                          className="text-danger-500 hover:text-danger-600 text-xs font-medium"
                         >
                           Delete
                         </button>
@@ -366,6 +369,19 @@ export default function InstrumentsPage() {
           </>
         )}
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <ConfirmationModal
+          title="Delete Instrument"
+          message={`Delete ${deleteTarget.symbol}? This will also remove all its price data. This action cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+          loading={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

@@ -490,9 +490,19 @@ export default function SignalsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`Generated ${data.signals_generated} signals`);
+        // Signals generated successfully
         // Refresh signals list
-        window.location.reload();
+        const params = new URLSearchParams();
+        params.set("page_size", "100");
+        if (horizonFilter) params.set("horizon", horizonFilter);
+        if (stateFilter) params.set("state", stateFilter);
+        const token2 = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const listRes = await fetch(`/api/v1/signals?${params}`, { headers: token2 ? { Authorization: `Bearer ${token2}` } : {} });
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          setSignals(listData.items);
+          setTotal(listData.total);
+        }
       }
     } catch (e) { console.error(e); }
     finally { setGenerating(false); }
