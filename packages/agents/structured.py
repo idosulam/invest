@@ -24,7 +24,7 @@ def _extract_json(text: str) -> dict | None:
     """Try to extract a JSON object from LLM text output.
 
     Handles: raw JSON, JSON wrapped in markdown code blocks, text with
-    embedded JSON objects.
+    embedded JSON objects, trailing commas, single quotes, etc.
     """
     # Strip markdown code fences
     cleaned = re.sub(r"```(?:json)?\s*", "", text)
@@ -36,11 +36,22 @@ def _extract_json(text: str) -> dict | None:
     except json.JSONDecodeError:
         pass
 
-    # Try to find a JSON object in the text
-    match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", cleaned, re.DOTALL)
+    # Try to find a JSON object in the text (greedy)
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:
+        candidate = match.group()
         try:
-            return json.loads(match.group())
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+        # Try fixing common LLM JSON issues
+        # Remove trailing commas before } or ]
+        fixed = re.sub(r",\s*([}\]])", r"\1", candidate)
+        # Replace single quotes with double quotes (crude but often works)
+        fixed = fixed.replace("'", '"')
+        try:
+            return json.loads(fixed)
         except json.JSONDecodeError:
             pass
 
@@ -101,8 +112,8 @@ def structured_chat(
             data = _extract_json(raw)
             if data is None:
                 logger.warning(
-                    "Attempt %d: could not extract JSON from LLM output: %s",
-                    attempt + 1, raw[:200],
+                    "Attempt %d: could not extract JSON from LLM output (len=%d): %s",
+                    attempt + 1, len(raw), raw[:500],
                 )
                 continue
 

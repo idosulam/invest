@@ -220,11 +220,43 @@ async def run_risk_debate(
     )
 
     if decision is None:
-        # Fallback
+        # Smarter fallback: try to extract decision from debate text
+        rating = PortfolioRating.HOLD
+        summary = "Risk debate completed but LLM synthesis unavailable. Defaulting to Hold."
+
+        debate_lower = full_debate.lower()
+        proposal_lower = trade_proposal.lower()
+
+        # Count sentiment signals in the debate
+        bullish = sum(1 for w in ["buy", "bullish", "strong", "conviction", "upside", "outperform"] if w in debate_lower)
+        bearish = sum(1 for w in ["sell", "bearish", "weak", "risk", "downside", "underperform", "exit"] if w in debate_lower)
+
+        # Check the original proposal action
+        if "buy" in proposal_lower or "enter_long" in proposal_lower or "bullish" in proposal_lower:
+            proposal_lean = 1
+        elif "sell" in proposal_lower or "exit" in proposal_lower or "bearish" in proposal_lower:
+            proposal_lean = -1
+        else:
+            proposal_lean = 0
+
+        combined = (bullish - bearish) + proposal_lean
+        if combined >= 3:
+            rating = PortfolioRating.BUY
+            summary = "Risk debate showed strong bullish consensus. LLM synthesis failed — this is a mechanical fallback."
+        elif combined >= 1:
+            rating = PortfolioRating.OVERWEIGHT
+            summary = "Risk debate leaned bullish. LLM synthesis failed — this is a mechanical fallback."
+        elif combined <= -3:
+            rating = PortfolioRating.SELL
+            summary = "Risk debate showed strong bearish consensus. LLM synthesis failed — this is a mechanical fallback."
+        elif combined <= -1:
+            rating = PortfolioRating.UNDERWEIGHT
+            summary = "Risk debate leaned bearish. LLM synthesis failed — this is a mechanical fallback."
+
         decision = PortfolioDecision(
-            rating=PortfolioRating.HOLD,
-            executive_summary="Risk debate completed but LLM synthesis unavailable. Defaulting to Hold.",
-            investment_thesis=f"Trade proposal: {trade_proposal[:300]}",
+            rating=rating,
+            executive_summary=summary,
+            investment_thesis=f"Mechanical fallback based on debate sentiment analysis. Trade proposal: {trade_proposal[:300]}",
             price_target=None,
             time_horizon=None,
         )
