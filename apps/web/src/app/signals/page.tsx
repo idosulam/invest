@@ -111,6 +111,10 @@ function SignalCard({ signal }: { signal: SignalData }) {
   const StateIcon = stateCfg.icon;
   const GateIcon = gateCfg.icon;
 
+  const navigateToInstrument = () => {
+    window.location.href = `/instruments/view?id=${signal.instrument_id}`;
+  };
+
   return (
     <Card className="overflow-hidden">
       <div
@@ -184,6 +188,14 @@ function SignalCard({ signal }: { signal: SignalData }) {
           >
             {loadingWhy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
             {explanation ? "Hide" : "Why?"}
+          </button>
+
+          {/* Chart link */}
+          <button
+            onClick={(e) => { e.stopPropagation(); navigateToInstrument(); }}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50"
+          >
+            Chart →
           </button>
 
           {/* Expand */}
@@ -616,7 +628,9 @@ export default function SignalsPage() {
                 item.final_state === "REDUCE" ? "REDUCE" :
                 item.final_state === "WATCH" ? "WATCH" : "HOLD";
               return (
-                <Card key={idx}>
+                <Card key={idx} className="cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all" onClick={() => {
+                  if (item.instrument_id) window.location.href = `/instruments/view?id=${item.instrument_id}`;
+                }}>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-semibold text-surface-900">{item.symbol}</p>
                     <div className="flex items-center gap-2">
