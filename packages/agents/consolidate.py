@@ -1,27 +1,42 @@
-"""Consolidated signal — combines all technical strategies plus the
-Bull/Bear/Judge debate into a single final verdict per instrument.
+"""Consolidated signal — full multi-agent pipeline.
 
-Two layers:
-1. A deterministic vote: each technical strategy's state is weighted
-   by its own confidence, giving a rough mechanical lean (bullish /
-   bearish / neutral) that doesn't depend on the LLM being available.
-2. An LLM "Chief Analyst" pass that is shown the full breakdown (all
-   7 strategies' verdicts + the bull/bear debate + risk level) and
-   asked to produce ONE final recommendation. If the LLM is
-   unreachable, we fall back to the deterministic vote alone so the
-   user still gets an answer.
+Architecture (inspired by TradingAgents):
 
-This is a synthesis of existing evidence, not a new independent
-prediction — it should never claim more certainty than its inputs.
+1. SENTIMENT ANALYST — structured sentiment report (band + score + confidence)
+2. TECHNICAL STRATEGIES — deterministic strategy signals with backtest win rates
+3. BULL/BEAR DEBATE — multi-round debate informed by news + congress + sentiment
+4. CHIEF ANALYST — synthesizes all inputs into a structured trade proposal
+5. RISK DEBATE — aggressive/conservative/neutral debate on the proposal
+6. PORTFOLIO MANAGER — final structured decision with 5-tier rating
+
+Each layer uses structured Pydantic output so downstream consumers
+never regex-parse prose.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.llm.ollama_client import OllamaClient
 from packages.agents.debate import run_debate
+from packages.agents.sentiment import analyze_sentiment
+from packages.agents.risk_debate import run_risk_debate
+from packages.agents.memory import DecisionMemoryLog
+from packages.agents.resolver import resolve_pending_outcomes
+from packages.agents.schemas import (
+    ConsolidatedSignal,
+    FinalState,
+    PortfolioDecision,
+    PortfolioRating,
+    RiskLevel,
+    SentimentReport,
+    render_pm_decision,
+    render_sentiment_report,
+)
+from packages.agents.structured import structured_chat
 from packages.strategies.engine import generate_signals_for_instrument
 from packages.domain.enums.common import SignalState
 from packages.domain.entities.models import Instrument
@@ -37,22 +52,6 @@ _STATE_LEAN = {
     "WATCH": 0.0,
     "NO_SIGNAL": 0.0,
 }
-
-
-@dataclass
-class ConsolidatedSignal:
-    symbol: str
-    final_state: str
-    final_confidence: float
-    summary: str
-    entry_zone: str
-    stop_loss: str
-    take_profit: str
-    risk_level: str
-    risk_reasoning: str
-    strategy_breakdown: list[dict] = field(default_factory=list)
-    debate_included: bool = True
-    llm_used: bool = True
 
 
 def _deterministic_lean(technical_signals: list[dict]) -> tuple[float, int]:
@@ -74,34 +73,52 @@ def _deterministic_lean(technical_signals: list[dict]) -> tuple[float, int]:
 
 
 async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> ConsolidatedSignal:
-    technical_signals = await generate_signals_for_instrument(db, instrument_id)
-    debate = await run_debate(db, instrument_id)
+    """Run the full multi-agent analysis pipeline.
 
-    # Fetch the current price explicitly — this must never be left for the
-    # LLM to infer indirectly from strategy entry zones, since that's how
-    # we previously ended up with take-profit targets sitting $1 away from
-    # the actual price. Prefer a live quote over the last stored bar, since
-    # stored bars can be a day or more stale.
+    Pipeline:
+    1. Sentiment analysis (structured)
+    2. Technical strategies (deterministic)
+    3. Multi-round bull/bear debate (LLM)
+    4. Chief analyst synthesis (structured)
+    5. Risk debate (LLM)
+    6. Portfolio manager final decision (structured)
+    """
     from sqlalchemy import select
-    from packages.domain.entities.models import MarketBar
+    from packages.domain.entities.models import MarketBar, StrategyPerformance
     from packages.domain.enums.common import Timeframe as _TF
 
+    # ── Fetch instrument ──
     inst_result = await db.execute(select(Instrument).where(Instrument.id == instrument_id))
     instrument = inst_result.scalar_one_or_none()
     if not instrument:
         raise ValueError("Instrument not found")
 
+    symbol = instrument.symbol
+
+    # ── Memory: resolve pending outcomes from past runs ──
+    memory = DecisionMemoryLog()
+    try:
+        resolve_pending_outcomes(memory, symbol=symbol)
+    except Exception as e:
+        logger.warning(f"[{symbol}] Outcome resolution failed (non-fatal): {e}")
+
+    # ── Memory: get past context for prompt injection ──
+    past_context = memory.get_past_context(symbol)
+    if past_context:
+        logger.info(f"[{symbol}] Injecting {len(past_context)} chars of past context")
+
+    # ── Get current price ──
     current_price = None
     price_is_live = False
     try:
         import yfinance as yf
-        fast_info = yf.Ticker(instrument.symbol).fast_info
+        fast_info = yf.Ticker(symbol).fast_info
         live_price = fast_info.get("lastPrice") if hasattr(fast_info, "get") else getattr(fast_info, "last_price", None)
         if live_price:
             current_price = float(live_price)
             price_is_live = True
     except Exception as e:
-        logger.warning(f"Live price fetch failed for {instrument.symbol}, falling back to stored bar: {e}")
+        logger.warning(f"Live price fetch failed for {symbol}, falling back to stored bar: {e}")
 
     if current_price is None:
         price_result = await db.execute(
@@ -113,18 +130,27 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
         latest_bar = price_result.scalar_one_or_none()
         current_price = float(latest_bar.close) if latest_bar else None
 
+    # ── Step 1: Sentiment Analysis ──
+    logger.info(f"[{symbol}] Running sentiment analysis...")
+    try:
+        sentiment_report, sentiment_markdown = await analyze_sentiment(db, instrument_id)
+    except Exception as e:
+        logger.warning(f"[{symbol}] Sentiment analysis failed: {e}")
+        sentiment_report = None
+        sentiment_markdown = "Sentiment analysis unavailable."
+
+    # ── Step 2: Technical Strategies ──
+    logger.info(f"[{symbol}] Running technical strategies...")
+    technical_signals = await generate_signals_for_instrument(db, instrument_id)
     lean, counted = _deterministic_lean(technical_signals)
 
-    # Pull backtest win rates for each strategy from strategy_performance
-    from packages.domain.entities.models import StrategyPerformance
-
+    # Pull backtest win rates
     strategy_breakdown = []
     for s in technical_signals:
         if s.get("error"):
             continue
         strat_name = s.get("strategy")
         win_rate = None
-        # Try instrument-specific win rate first, then aggregate
         if strat_name:
             try:
                 perf_result = await db.execute(
@@ -138,7 +164,6 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
                     win_rate = float(perf.win_rate)
             except Exception:
                 pass
-            # Fallback: aggregate across all instruments
             if win_rate is None:
                 try:
                     agg_result = await db.execute(
@@ -160,255 +185,199 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
             "win_rate": win_rate,
         })
 
-    # Build the evidence block for the Chief Analyst LLM pass.
     strategy_lines = "\n".join(
         f"- {b['strategy']}: {b['state']} (confidence {b['confidence']:.0%})"
         + (f" — historical win rate: {b['win_rate']:.0f}%" if b.get('win_rate') is not None else " — no backtest data yet")
         for b in strategy_breakdown
     ) or "No technical strategies produced a signal."
 
-    price_source_note = "live quote" if price_is_live else "last stored daily close, may be stale"
-    price_line = (
-        f"CURRENT PRICE: ${current_price:.2f} ({price_source_note})\n\n" if current_price else
-        "CURRENT PRICE: unavailable\n\n"
-    )
+    # ── Step 3: Bull/Bear Debate ──
+    logger.info(f"[{symbol}] Running bull/bear debate...")
+    try:
+        debate = await run_debate(db, instrument_id)
+    except Exception as e:
+        logger.warning(f"[{symbol}] Debate failed: {e}")
+        debate = None
 
-    # Free analyst consensus data (Yahoo Finance) — target prices and rating
-    # from the pool of analysts actually covering this stock.
+    # ── Step 4: Analyst consensus ──
     analyst_line = ""
     try:
         import yfinance as yf
-        if instrument:
-            yf_info = yf.Ticker(instrument.symbol).info
-            mean_target = yf_info.get("targetMeanPrice")
-            high_target = yf_info.get("targetHighPrice")
-            low_target = yf_info.get("targetLowPrice")
-            rec = yf_info.get("recommendationKey")
-            n_analysts = yf_info.get("numberOfAnalystOpinions")
-            if mean_target and n_analysts:
-                analyst_line = (
-                    f"WALL STREET ANALYST CONSENSUS ({n_analysts} analysts covering this stock):\n"
-                    f"- Average price target: ${mean_target:.2f} "
-                    f"(range: ${low_target:.2f} - ${high_target:.2f})\n"
-                    f"- Consensus rating: {(rec or 'unknown').replace('_', ' ').upper()}\n\n"
-                )
+        yf_info = yf.Ticker(symbol).info
+        mean_target = yf_info.get("targetMeanPrice")
+        high_target = yf_info.get("targetHighPrice")
+        low_target = yf_info.get("targetLowPrice")
+        rec = yf_info.get("recommendationKey")
+        n_analysts = yf_info.get("numberOfAnalystOpinions")
+        if mean_target and n_analysts:
+            analyst_line = (
+                f"WALL STREET ANALYST CONSENSUS ({n_analysts} analysts):\n"
+                f"- Average price target: ${mean_target:.2f} "
+                f"(range: ${low_target:.2f} - ${high_target:.2f})\n"
+                f"- Consensus rating: {(rec or 'unknown').replace('_', ' ').upper()}\n\n"
+            )
     except Exception as e:
         logger.warning(f"Could not fetch analyst consensus: {e}")
 
+    # ── Build chief analyst evidence block ──
+    price_source = "live quote" if price_is_live else "last stored daily close, may be stale"
+    price_line = f"CURRENT PRICE: ${current_price:.2f} ({price_source})\n\n" if current_price else "CURRENT PRICE: unavailable\n\n"
+
+    debate_section = ""
+    if debate:
+        debate_section = (
+            f"DEBATE VERDICT (after {debate.rounds_completed} rounds):\n{debate.verdict}\n"
+            f"Risk level: {debate.risk_level} — {debate.risk_reasoning}\n"
+            f"Suggested entry: {debate.suggested_entry}\n"
+            f"Stop-loss: {debate.suggested_stop_loss}\n"
+            f"Take-profit: {debate.suggested_take_profit}\n\n"
+        )
+
+    sentiment_section = ""
+    if sentiment_report:
+        sentiment_section = f"SENTIMENT ANALYSIS:\n{sentiment_markdown}\n\n"
+
+    past_context_section = ""
+    if past_context:
+        past_context_section = f"LESSONS FROM PAST DECISIONS:\n{past_context}\n\n"
+
     evidence_block = (
-        price_line +
-        analyst_line +
-        f"TECHNICAL STRATEGIES ({counted} with a signal, out of {len(technical_signals)} run):\n"
+        price_line + analyst_line +
+        f"TECHNICAL STRATEGIES ({counted} with signal, out of {len(technical_signals)}):\n"
         f"{strategy_lines}\n\n"
-        f"NEWS/CONGRESS-INFORMED DEBATE VERDICT:\n{debate.verdict}\n"
-        f"Debate risk level: {debate.risk_level} — {debate.risk_reasoning}\n"
-        f"Debate suggested entry: {debate.suggested_entry}\n"
-        f"Debate suggested stop-loss: {debate.suggested_stop_loss}\n"
-        f"Debate suggested take-profit: {debate.suggested_take_profit}\n"
+        f"{sentiment_section}"
+        f"{debate_section}"
+        f"{past_context_section}"
     )
 
-    system = (
-        "You are the chief analyst synthesizing multiple inputs into ONE final "
-        "recommendation for a retail investor. You are given: (1) a set of "
-        "independent technical trading strategies, each with its own verdict, "
-        "confidence, AND historical backtest win rate for this specific stock "
-        "(or aggregate across all stocks if per-stock data isn't available), "
-        "(2) a separate debate-based verdict informed by news and congressional "
-        "trading activity, and (3) Wall Street analyst consensus data (average "
-        "price target and rating from professional analysts covering the stock, "
-        "when available). These inputs may disagree — that is normal and expected. "
-        "IMPORTANT: Weigh strategies by their historical win rate — a strategy "
-        "with a 65% win rate on this stock deserves more weight than one with "
-        "40%. If a strategy has no backtest data yet, treat its opinion as "
-        "unverified and weigh it cautiously. Do not force false consensus. "
-        "IMPORTANT: your STOP_LOSS and TAKE_PROFIT "
-        "numbers must be your own reasoned levels based on ALL the evidence "
-        "together (current price, technical levels, and analyst target range) "
-        "— do not simply copy a number from the debate section without "
-        "checking it makes sense against the current price and analyst range "
-        "given in the evidence. Respond in EXACTLY this format, nothing else:\n\n"
-        "FINAL_STATE: <one of ENTER_LONG, EXIT, REDUCE, HOLD, WATCH>\n"
-        "FINAL_CONFIDENCE: <a number 0-100 representing how aligned the "
-        "evidence is, not a probability of profit>\n"
-        "SUMMARY: <2-3 sentences explaining the final call in plain language, "
-        "referencing where the technical strategies, the debate, and the "
-        "analyst consensus agreed or disagreed>\n"
-        "ENTRY_ZONE: <Grounded in CURRENT PRICE. If ENTER_LONG: the specific "
-        "price zone to buy NOW or on a small near-term dip (within 2-3% of "
-        "current price). If HOLD/WATCH: give a realistic action — either a "
-        "small starter position at current levels, or a limit order within "
-        "3-5% of current price at a nearby support level. NEVER suggest "
-        "waiting for a large pullback (5%+) that may never happen — if the "
-        "setup isn't attractive now, say so plainly and give the current "
-        "price as the reference. Always include the current price in your "
-        "answer so the reader can judge the distance.>\n"
-        "STOP_LOSS: <a concrete price level BELOW YOUR ENTRY_ZONE (not below "
-        "the current price — below where you're suggesting to enter). This "
-        "is the 'I was wrong' level. Must be meaningfully below entry — "
-        "typically 3-8% depending on the stock's volatility. Never set "
-        "stop-loss at the same level as entry zone.>\n"
-        "TAKE_PROFIT: <a concrete price level ABOVE YOUR ENTRY_ZONE for a "
-        "bullish stance (or below for bearish). Must represent a realistic "
-        "move — base it on the stock's recent trading range, analyst "
-        "targets, or technical resistance. Minimum 2:1 reward-to-risk "
-        "ratio vs the stop-loss distance.>\n"
-        "RISK_LEVEL: <LOW, MEDIUM, or HIGH>\n"
-        "RISK_REASONING: <one sentence>"
+    # ── Step 5: Chief Analyst — structured trade proposal ──
+    logger.info(f"[{symbol}] Running chief analyst synthesis...")
+    chief_system = (
+        "You are the chief analyst synthesizing multiple inputs into ONE trade proposal. "
+        "You are given: (1) technical strategies with confidence and backtest win rates, "
+        "(2) a sentiment report with band/score/confidence, (3) a bull/bear debate verdict, "
+        "(4) Wall Street analyst consensus. These inputs may disagree — that is normal.\n\n"
+        "IMPORTANT:\n"
+        "- Weigh strategies by historical win rate\n"
+        "- Ground entry/stop/price levels in the CURRENT PRICE\n"
+        "- Stop-loss must be below entry zone, take-profit above\n"
+        "- Minimum 2:1 reward-to-risk ratio\n"
+        "- Be specific with numbers, not vague ranges"
     )
 
+    chief_user = (
+        f"Analyze {symbol} and produce a trade proposal.\n\n"
+        f"{evidence_block}"
+    )
+
+    from packages.agents.schemas import TraderProposal, TraderAction
     client = OllamaClient()
-    llm_used = True
+
+    proposal = structured_chat(
+        client, chief_system, chief_user,
+        schema=TraderProposal,
+        temperature=0.2,
+    )
+
+    if proposal is None:
+        # Fallback to deterministic lean
+        proposal = TraderProposal(
+            action=TraderAction.BUY if lean > 0.3 else (TraderAction.SELL if lean < -0.3 else TraderAction.HOLD),
+            reasoning=f"LLM unavailable. Deterministic lean: {lean:+.2f}. {debate.verdict[:200] if debate else ''}",
+            entry_price=current_price,
+            stop_loss=round(current_price * 0.95, 2) if current_price else None,
+            position_sizing="2-3% of portfolio (conservative default)",
+        )
+
+    from packages.agents.schemas import render_trader_proposal
+    proposal_markdown = render_trader_proposal(proposal)
+
+    # ── Step 6: Risk Debate → Portfolio Manager ──
+    logger.info(f"[{symbol}] Running risk debate...")
+    bull_text = debate.bull_case if debate else "No debate available."
+    bear_text = debate.bear_case if debate else "No debate available."
+
     try:
-        response = client.chat(system, evidence_block, temperature=0.2)
-        parsed = _parse_chief_response(response)
-        parsed = _validate_chief_output(parsed, current_price)
-    except RuntimeError as e:
-        logger.warning(f"Chief analyst LLM unavailable, falling back to deterministic vote: {e}")
-        llm_used = False
-        parsed = _fallback_from_lean(lean, debate)
+        pm_rendered, pm_decision = await run_risk_debate(
+            symbol=symbol,
+            trade_proposal=proposal_markdown,
+            bull_case=bull_text,
+            bear_case=bear_text,
+            current_price=current_price,
+        )
+    except Exception as e:
+        logger.warning(f"[{symbol}] Risk debate failed: {e}")
+        pm_decision = PortfolioDecision(
+            rating=PortfolioRating.HOLD,
+            executive_summary=f"Risk debate failed: {e}",
+            investment_thesis="Unable to complete risk analysis.",
+        )
+        pm_rendered = render_pm_decision(pm_decision)
+
+    # ── Build final ConsolidatedSignal ──
+    # Map PM rating to our signal states
+    rating_to_state = {
+        PortfolioRating.BUY: "ENTER_LONG",
+        PortfolioRating.OVERWEIGHT: "ENTER_LONG",
+        PortfolioRating.HOLD: "HOLD",
+        PortfolioRating.UNDERWEIGHT: "REDUCE",
+        PortfolioRating.SELL: "EXIT",
+    }
+    final_state = rating_to_state.get(pm_decision.rating, "HOLD")
+
+    # Derive confidence from alignment
+    alignment_score = 50.0
+    if debate and debate.risk_level == "LOW":
+        alignment_score += 15
+    elif debate and debate.risk_level == "HIGH":
+        alignment_score -= 15
+    if sentiment_report:
+        if sentiment_report.overall_band.value in ("Bullish", "Mildly Bullish") and final_state == "ENTER_LONG":
+            alignment_score += 10
+        elif sentiment_report.overall_band.value in ("Bearish", "Mildly Bearish") and final_state in ("EXIT", "REDUCE"):
+            alignment_score += 10
+        elif sentiment_report.overall_band.value in ("Bullish", "Mildly Bullish") and final_state in ("EXIT", "REDUCE"):
+            alignment_score -= 10
+    if counted > 0:
+        alignment_score += min(20, counted * 3)
+    alignment_score = max(0, min(100, alignment_score))
+
+    # Extract entry/stop/target from proposal
+    entry_str = f"${proposal.entry_price:.2f}" if proposal.entry_price else "See proposal"
+    stop_str = f"${proposal.stop_loss:.2f}" if proposal.stop_loss else "See proposal"
+    # Try to get take-profit from PM decision
+    tp_str = f"${pm_decision.price_target:.2f}" if pm_decision.price_target else "See analysis"
+
+    # ── Memory: store decision for future reflection ──
+    try:
+        memory.store_decision(
+            symbol=symbol,
+            trade_date=datetime.now().strftime("%Y-%m-%d"),
+            final_state=final_state,
+            confidence=alignment_score,
+            summary=pm_decision.executive_summary,
+            entry_zone=entry_str,
+            stop_loss=stop_str,
+            take_profit=tp_str,
+            risk_level=debate.risk_level if debate else "MEDIUM",
+            strategy_breakdown=strategy_breakdown,
+            sentiment_band=sentiment_report.overall_band.value if sentiment_report else None,
+            sentiment_score=sentiment_report.overall_score if sentiment_report else None,
+        )
+    except Exception as e:
+        logger.warning(f"[{symbol}] Failed to store decision in memory: {e}")
 
     return ConsolidatedSignal(
-        symbol=debate.symbol,
-        final_state=parsed["final_state"],
-        final_confidence=parsed["final_confidence"],
-        summary=parsed["summary"],
-        entry_zone=parsed["entry_zone"],
-        stop_loss=parsed["stop_loss"],
-        take_profit=parsed["take_profit"],
-        risk_level=parsed["risk_level"],
-        risk_reasoning=parsed["risk_reasoning"],
+        symbol=symbol,
+        final_state=FinalState(final_state),
+        final_confidence=alignment_score,
+        summary=pm_decision.executive_summary,
+        entry_zone=entry_str,
+        stop_loss=stop_str,
+        take_profit=tp_str,
+        risk_level=RiskLevel(debate.risk_level) if debate else RiskLevel.MEDIUM,
+        risk_reasoning=debate.risk_reasoning if debate else "Risk debate unavailable.",
         strategy_breakdown=strategy_breakdown,
-        debate_included=True,
-        llm_used=llm_used,
+        debate_included=debate is not None,
+        llm_used=True,
     )
-
-
-def _parse_chief_response(text: str) -> dict:
-    fields = {
-        "final_state": "HOLD", "final_confidence": 30.0, "summary": "",
-        "entry_zone": "Not applicable", "stop_loss": "", "take_profit": "",
-        "risk_level": "MEDIUM", "risk_reasoning": "",
-    }
-    key_map = {
-        "FINAL_STATE": "final_state", "FINAL_CONFIDENCE": "final_confidence",
-        "SUMMARY": "summary", "ENTRY_ZONE": "entry_zone", "STOP_LOSS": "stop_loss",
-        "TAKE_PROFIT": "take_profit", "RISK_LEVEL": "risk_level",
-        "RISK_REASONING": "risk_reasoning",
-    }
-    for line in text.splitlines():
-        line = line.strip()
-        for prefix, key in key_map.items():
-            if line.upper().startswith(prefix + ":"):
-                val = line.split(":", 1)[1].strip()
-                fields[key] = val
-                break
-
-    valid_states = {"ENTER_LONG", "EXIT", "REDUCE", "HOLD", "WATCH"}
-    if fields["final_state"].upper() not in valid_states:
-        fields["final_state"] = "HOLD"
-    else:
-        fields["final_state"] = fields["final_state"].upper()
-
-    try:
-        fields["final_confidence"] = max(0.0, min(100.0, float(str(fields["final_confidence"]).replace("%", ""))))
-    except (ValueError, TypeError):
-        fields["final_confidence"] = 30.0
-
-    if fields["risk_level"].upper() not in ("LOW", "MEDIUM", "HIGH"):
-        fields["risk_level"] = "MEDIUM"
-    else:
-        fields["risk_level"] = fields["risk_level"].upper()
-
-    if not fields["summary"]:
-        fields["summary"] = text[:400]
-
-    return fields
-
-
-def _validate_chief_output(parsed: dict, current_price: float | None) -> dict:
-    """Sanity-check the LLM output and fix common nonsense patterns.
-
-    Catches:
-    - Entry zone and stop-loss at the same level
-    - Entry zone suggesting a huge pullback (>10% from current price)
-    - Stop-loss above entry for a bullish stance
-    - Take-profit below entry for a bullish stance
-    """
-    if current_price is None or current_price <= 0:
-        return parsed
-
-    import re
-
-    def extract_price(text: str) -> float | None:
-        """Pull the first dollar price from a string."""
-        matches = re.findall(r'\$([\d,]+\.?\d*)', text)
-        if matches:
-            return float(matches[0].replace(',', ''))
-        # Try bare numbers
-        matches = re.findall(r'(?<!\w)(\d+\.\d{1,2})(?!\w)', text)
-        if matches:
-            val = float(matches[0])
-            if 10 < val < 10000:  # plausible stock price range
-                return val
-        return None
-
-    entry_price = extract_price(parsed.get('entry_zone', ''))
-    stop_price = extract_price(parsed.get('stop_loss', ''))
-    target_price = extract_price(parsed.get('take_profit', ''))
-
-    state = parsed.get('final_state', 'HOLD')
-
-    # Fix: entry and stop-loss at the same level
-    if entry_price and stop_price and abs(entry_price - stop_price) < current_price * 0.005:
-        # Stop-loss too close to entry — set it 5% below entry
-        new_stop = round(entry_price * 0.95, 2)
-        parsed['stop_loss'] = f'${new_stop:.2f} (adjusted — original was too close to entry)'
-        stop_price = new_stop
-
-    # Fix: stop-loss above entry for bullish stance
-    if entry_price and stop_price and state == 'ENTER_LONG' and stop_price > entry_price:
-        new_stop = round(entry_price * 0.95, 2)
-        parsed['stop_loss'] = f'${new_stop:.2f} (adjusted — stop must be below entry)'
-        stop_price = new_stop
-
-    # Fix: take-profit below entry for bullish stance
-    if entry_price and target_price and state == 'ENTER_LONG' and target_price < entry_price:
-        new_target = round(entry_price * 1.10, 2)
-        parsed['take_profit'] = f'${new_target:.2f} (adjusted — target must be above entry)'
-
-    # Fix: entry zone suggesting huge pullback for non-bullish states
-    if entry_price and state in ('WATCH', 'HOLD'):
-        pullback_pct = (current_price - entry_price) / current_price * 100
-        if pullback_pct > 8:
-            # Entry suggestion is >8% below current — flag it as unrealistic
-            parsed['entry_zone'] = (
-                f'${current_price:.2f} (current price). The suggested entry at '
-                f'${entry_price:.2f} requires a {pullback_pct:.0f}% pullback that may '
-                f'never happen. Consider a small starter position at current levels '
-                f'or a limit order within 3-5% of current price.'
-            )
-
-    return parsed
-
-
-def _fallback_from_lean(lean: float, debate) -> dict:
-    """Used only if the LLM is unreachable — a simple rule-based fallback."""
-    if lean > 0.3:
-        state = "ENTER_LONG"
-    elif lean < -0.3:
-        state = "EXIT"
-    else:
-        state = "HOLD"
-    return {
-        "final_state": state,
-        "final_confidence": min(abs(lean) * 100, 100.0),
-        "summary": (
-            f"LLM unavailable — this is a mechanical vote across technical "
-            f"strategies only (debate evidence not weighed in). Lean score: {lean:+.2f}."
-        ),
-        "entry_zone": "Not applicable — LLM unavailable for detailed guidance",
-        "stop_loss": debate.suggested_stop_loss or "Not available",
-        "take_profit": debate.suggested_take_profit or "Not available",
-        "risk_level": "MEDIUM",
-        "risk_reasoning": "Elevated uncertainty — LLM synthesis unavailable, falling back to raw vote.",
-    }

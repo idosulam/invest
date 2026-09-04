@@ -7,7 +7,13 @@ help: ## Show this help
 
 # ── Development ─────────────────────────────────────────────
 dev: ## Run API locally with hot-reload (requires running `make up` first)
-	uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+dev-install: ## Install all deps (including dev) locally with uv
+	uv sync
+
+lock: ## Regenerate uv.lock
+	uv lock
 
 up: ## Start all services with Docker Compose
 	docker compose up -d
@@ -28,45 +34,45 @@ db-shell: ## Open psql shell to the database
 	docker compose exec db psql -U market -d market_platform
 
 db-migrate: ## Generate a new Alembic migration
-	alembic revision --autogenerate -m "$(msg)"
+	uv run alembic revision --autogenerate -m "$(msg)"
 
 db-upgrade: ## Apply all pending migrations
-	alembic upgrade head
+	uv run alembic upgrade head
 
 db-downgrade: ## Rollback one migration
-	alembic downgrade -1
+	uv run alembic downgrade -1
 
 db-history: ## Show migration history
-	alembic history
+	uv run alembic history
 
 # ── Testing ─────────────────────────────────────────────────
 test: ## Run all tests
-	pytest tests/ -v --tb=short
+	uv run pytest tests/ -v --tb=short
 
 test-unit: ## Run unit tests only
-	pytest tests/unit/ -v --tb=short -m unit
+	uv run pytest tests/unit/ -v --tb=short -m unit
 
 test-integration: ## Run integration tests only
-	pytest tests/integration/ -v --tb=short -m integration
+	uv run pytest tests/integration/ -v --tb=short -m integration
 
 test-golden: ## Run golden/backtest reproducibility tests
-	pytest tests/golden/ -v --tb=short -m golden
+	uv run pytest tests/golden/ -v --tb=short -m golden
 
 test-cov: ## Run tests with coverage
-	pytest tests/ -v --cov=apps --cov=packages --cov-report=term-missing
+	uv run pytest tests/ -v --cov=apps --cov=packages --cov-report=term-missing
 
 # ── Code Quality ────────────────────────────────────────────
 lint: ## Run linter (ruff)
-	ruff check apps/ packages/ tests/
+	uv run ruff check apps/ packages/ tests/
 
 lint-fix: ## Auto-fix lint issues
-	ruff check --fix apps/ packages/ tests/
+	uv run ruff check --fix apps/ packages/ tests/
 
 format: ## Format code
-	ruff format apps/ packages/ tests/
+	uv run ruff format apps/ packages/ tests/
 
 typecheck: ## Run type checking (mypy)
-	mypy apps/ packages/
+	uv run mypy apps/ packages/
 
 # ── Cleanup ─────────────────────────────────────────────────
 clean: ## Remove caches, build artifacts

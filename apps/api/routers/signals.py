@@ -267,6 +267,7 @@ class DebateResponse(BaseModel):
     symbol: str
     bull_case: str
     bear_case: str
+    rounds_completed: int = 1
     verdict: str
     risk_level: str
     risk_reasoning: str
@@ -281,19 +282,20 @@ class DebateResponse(BaseModel):
 @router.post("/debate/{instrument_id}", response_model=DebateResponse)
 async def run_debate_endpoint(
     instrument_id: uuid.UUID,
+    rounds: int = Query(2, ge=1, le=5, description="Number of debate rounds"),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
     """Run the Bull/Bear/Judge agent debate for an instrument.
 
-    Uses recent price action, news + sentiment, and congressional trading
-    activity as evidence. Requires a reachable local LLM (Ollama) — if it's
-    unavailable, the response will say so in the verdict rather than fail.
+    Multi-round debate: bull and bear argue across N rounds, then a judge
+    synthesizes the result. Uses price action, news, congressional trading,
+    and sentiment data as evidence.
     """
     from packages.agents.debate import run_debate
 
     try:
-        result = await run_debate(db, instrument_id)
+        result = await run_debate(db, instrument_id, num_rounds=rounds)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -301,6 +303,7 @@ async def run_debate_endpoint(
         symbol=result.symbol,
         bull_case=result.bull_case,
         bear_case=result.bear_case,
+        rounds_completed=result.rounds_completed,
         verdict=result.verdict,
         risk_level=result.risk_level,
         risk_reasoning=result.risk_reasoning,
@@ -308,6 +311,53 @@ async def run_debate_endpoint(
         suggested_stop_loss=result.suggested_stop_loss,
         suggested_take_profit=result.suggested_take_profit,
         evidence_summary=result.evidence_summary,
+    )
+
+
+# ── Sentiment Analysis ──────────────────────────────────────
+
+class SentimentResponse(BaseModel):
+    symbol: str
+    overall_band: str
+    overall_score: float
+    confidence: str
+    narrative: str
+    rendered_markdown: str
+
+
+@router.post("/sentiment/{instrument_id}", response_model=SentimentResponse)
+async def run_sentiment_endpoint(
+    instrument_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Run structured sentiment analysis for an instrument.
+
+    Aggregates news sentiment, congressional trading, and price momentum
+    into a single structured report with band, score, and confidence.
+    """
+    from packages.agents.sentiment import analyze_sentiment
+    from packages.agents.schemas import render_sentiment_report
+
+    try:
+        report, rendered = await analyze_sentiment(db, instrument_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    # Get symbol for response
+    from sqlalchemy import select as sa_select
+    from packages.domain.entities.models import Instrument
+    inst_result = await db.execute(sa_select(Instrument).where(Instrument.id == instrument_id))
+    inst = inst_result.scalar_one_or_none()
+    symbol = inst.symbol if inst else "?"
+
+    return SentimentResponse(
+        symbol=symbol,
+        overall_band=report.overall_band.value,
+        overall_score=report.overall_score,
+        confidence=report.confidence,
+        narrative=report.narrative,
+        rendered_markdown=rendered,
     )
 
 
@@ -324,6 +374,7 @@ class ConsolidatedResponse(BaseModel):
     risk_level: str
     risk_reasoning: str
     strategy_breakdown: list[dict]
+    debate_included: bool = True
     llm_used: bool
 
 
@@ -346,14 +397,119 @@ async def run_consolidated_endpoint(
 
     return ConsolidatedResponse(
         symbol=result.symbol,
-        final_state=result.final_state,
+        final_state=result.final_state.value if hasattr(result.final_state, 'value') else result.final_state,
         final_confidence=result.final_confidence,
         summary=result.summary,
         entry_zone=result.entry_zone,
         stop_loss=result.stop_loss,
         take_profit=result.take_profit,
-        risk_level=result.risk_level,
+        risk_level=result.risk_level.value if hasattr(result.risk_level, 'value') else result.risk_level,
         risk_reasoning=result.risk_reasoning,
         strategy_breakdown=result.strategy_breakdown,
+        debate_included=result.debate_included,
         llm_used=result.llm_used,
+    )
+
+
+# ── Decision Memory Log ────────────────────────────────────
+
+class MemoryEntryResponse(BaseModel):
+    date: str
+    symbol: str
+    state: str
+    confidence: str
+    pending: bool
+    raw_return: Optional[str] = None
+    alpha_return: Optional[str] = None
+    holding_days: Optional[int] = None
+    resolved: Optional[str] = None
+    decision: str
+    reflection: Optional[str] = None
+
+
+class MemoryLogResponse(BaseModel):
+    entries: list[MemoryEntryResponse]
+    total: int
+    pending_count: int
+    resolved_count: int
+
+
+class ResolveResponse(BaseModel):
+    resolved: int
+    entries: list[dict]
+
+
+@router.get("/memory", response_model=MemoryLogResponse)
+async def get_memory_log(
+    symbol: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    _user: User = Depends(get_current_user),
+):
+    """Get the decision memory log.
+
+    Returns all entries (pending and resolved), optionally filtered by symbol.
+    Pending entries are decisions awaiting outcome resolution.
+    Resolved entries include actual returns and reflections.
+    """
+    from packages.agents.memory import DecisionMemoryLog
+
+    memory = DecisionMemoryLog()
+    entries = memory.load_entries()
+
+    if symbol:
+        entries = [e for e in entries if e.get("symbol") == symbol.upper()]
+
+    # Most recent first
+    entries = list(reversed(entries[-limit:]))
+
+    pending_count = sum(1 for e in entries if e.get("pending"))
+    resolved_count = len(entries) - pending_count
+
+    items = [
+        MemoryEntryResponse(
+            date=e.get("date", ""),
+            symbol=e.get("symbol", ""),
+            state=e.get("state", ""),
+            confidence=e.get("confidence", ""),
+            pending=e.get("pending", False),
+            raw_return=e.get("raw_return"),
+            alpha_return=e.get("alpha_return"),
+            holding_days=e.get("holding_days"),
+            resolved=e.get("resolved"),
+            decision=e.get("decision", ""),
+            reflection=e.get("reflection"),
+        )
+        for e in entries
+    ]
+
+    return MemoryLogResponse(
+        entries=items,
+        total=len(items),
+        pending_count=pending_count,
+        resolved_count=resolved_count,
+    )
+
+
+@router.post("/memory/resolve", response_model=ResolveResponse)
+async def resolve_memory_outcomes(
+    symbol: Optional[str] = None,
+    holding_days: int = Query(5, ge=1, le=30),
+    _user: User = Depends(require_analyst),
+):
+    """Resolve pending decision entries with actual market outcomes.
+
+    Fetches price data after the holding period, calculates returns
+    vs benchmark, and generates LLM reflections on what held/failed.
+    """
+    from packages.agents.memory import DecisionMemoryLog
+    from packages.agents.resolver import resolve_pending_outcomes
+
+    memory = DecisionMemoryLog()
+    resolved = resolve_pending_outcomes(
+        memory, symbol=symbol, holding_days=holding_days,
+    )
+
+    return ResolveResponse(
+        resolved=len(resolved),
+        entries=resolved,
     )

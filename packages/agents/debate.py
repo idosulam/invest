@@ -1,14 +1,16 @@
-"""Bull / Bear / Judge agent debate.
+"""Bull / Bear / Judge agent debate — multi-round with structured output.
 
-Three LLM calls reason over the same evidence (recent price action,
-news + sentiment, congressional trades) from opposite starting
-positions, then a neutral judge weighs both arguments and produces
-a plain-language recommendation with a qualitative risk level.
+Inspired by TradingAgents' researcher team architecture:
+1. Bull and Bear researchers argue across multiple rounds (configurable)
+2. Each round, each side sees the other's latest argument and responds
+3. A Research Manager judge synthesizes the debate into a structured verdict
 
-This is NOT a statistical probability estimate — no backtested edge
-sits behind these numbers. It is a structured way to surface the
-strongest case on each side plus a reasoned synthesis, framed
-honestly as reasoning, not as a calibrated forecast.
+The multi-round approach surfaces stronger arguments because each side
+must directly counter the other's points rather than just listing data.
+
+Two layers of structured output:
+- JudgeVerdict: typed Pydantic model from the judge (no regex parsing)
+- DebateResult: full debate artifact with all rounds preserved
 """
 
 import logging
@@ -19,6 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.llm.ollama_client import OllamaClient
+from packages.agents.schemas import (
+    DebateResult,
+    JudgeVerdict,
+    RiskLevel,
+)
+from packages.agents.structured import structured_chat
+from packages.data.providers.fred import get_macro_evidence_block
 from packages.domain.entities.models import (
     Instrument, MarketBar, NewsArticle, CongressTradeRecord,
 )
@@ -26,22 +35,12 @@ from packages.domain.enums.common import Timeframe
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class DebateResult:
-    symbol: str
-    bull_case: str
-    bear_case: str
-    verdict: str
-    risk_level: str
-    risk_reasoning: str
-    suggested_entry: str
-    suggested_stop_loss: str
-    suggested_take_profit: str
-    evidence_summary: dict = field(default_factory=dict)
+# Default number of debate rounds. Each round = one bull argument + one bear argument.
+DEFAULT_DEBATE_ROUNDS = 2
 
 
 async def _gather_evidence(db: AsyncSession, instrument: Instrument) -> dict:
+    """Pull price action, news, and congressional trading data."""
     bars_result = await db.execute(
         select(MarketBar)
         .where(MarketBar.instrument_id == instrument.id, MarketBar.timeframe == Timeframe.DAILY)
@@ -54,10 +53,14 @@ async def _gather_evidence(db: AsyncSession, instrument: Instrument) -> dict:
     if bars:
         first, last = bars[0], bars[-1]
         pct_change = float((last.close - first.close) / first.close * 100) if first.close else 0
+        high_30 = max(float(b.high) for b in bars)
+        low_30 = min(float(b.low) for b in bars)
+        avg_vol = sum(float(b.volume) for b in bars) / len(bars)
         price_summary = (
             f"Over the last {len(bars)} trading days, {instrument.symbol} moved from "
             f"${first.close} to ${last.close} ({pct_change:+.2f}%). "
-            f"Most recent close: ${last.close}, volume: {int(last.volume):,}."
+            f"30-day range: ${low_30:.2f} — ${high_30:.2f}. "
+            f"Most recent close: ${last.close}, avg volume: {int(avg_vol):,}."
         )
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=14)
@@ -65,7 +68,7 @@ async def _gather_evidence(db: AsyncSession, instrument: Instrument) -> dict:
         select(NewsArticle)
         .where(NewsArticle.instrument_id == instrument.id, NewsArticle.published_at >= cutoff)
         .order_by(NewsArticle.published_at.desc())
-        .limit(10)
+        .limit(15)
     )
     articles = news_result.scalars().all()
     news_lines = [
@@ -97,127 +100,86 @@ async def _gather_evidence(db: AsyncSession, instrument: Instrument) -> dict:
 
 
 def _build_evidence_block(evidence: dict) -> str:
+    # Include FRED macro data
+    macro_block = get_macro_evidence_block()
+
     return (
         f"PRICE ACTION:\n{evidence['price_summary']}\n\n"
         f"RECENT NEWS (last 14 days):\n" + "\n".join(evidence["news_lines"]) + "\n\n"
-        f"CONGRESSIONAL TRADING (last 90 days):\n" + "\n".join(evidence["congress_lines"])
+        f"CONGRESSIONAL TRADING (last 90 days):\n" + "\n".join(evidence["congress_lines"]) + "\n\n"
+        f"{macro_block}"
     )
 
 
-async def run_debate(db: AsyncSession, instrument_id) -> DebateResult:
-    result = await db.execute(select(Instrument).where(Instrument.id == instrument_id))
-    instrument = result.scalar_one_or_none()
-    if not instrument:
-        raise ValueError("Instrument not found")
-
-    evidence = await _gather_evidence(db, instrument)
-    evidence_block = _build_evidence_block(evidence)
-
-    client = OllamaClient()
-
-    bull_system = (
-        "You are a bullish equity analyst. Given the evidence below, build the "
-        "strongest honest case for BUYING or HOLDING this stock. Cite specific "
-        "facts from the evidence. Do not invent facts not present in the evidence. "
-        "If the evidence is weak or thin, say so plainly rather than overstating "
-        "your case. Keep it to 3-5 sentences."
-    )
-    bear_system = (
-        "You are a bearish equity analyst. Given the evidence below, build the "
-        "strongest honest case for SELLING or AVOIDING this stock. Cite specific "
-        "facts from the evidence. Do not invent facts not present in the evidence. "
-        "If the evidence is weak or thin, say so plainly rather than overstating "
-        "your case. Keep it to 3-5 sentences."
-    )
-
-    try:
-        bull_case = client.chat(bull_system, evidence_block)
-    except RuntimeError as e:
-        bull_case = f"(Bull agent unavailable: {e})"
-
-    try:
-        bear_case = client.chat(bear_system, evidence_block)
-    except RuntimeError as e:
-        bear_case = f"(Bear agent unavailable: {e})"
-
-    judge_system = (
-        "You are a neutral risk analyst with no prior opinion on this stock. "
-        "You will be given a bull case, a bear case, and the underlying evidence. "
-        "Weigh both arguments on their merits — do not automatically split the "
-        "difference. Then respond in EXACTLY this format, nothing else:\n\n"
-        "VERDICT: <one or two sentences, plain language, what a reasonable "
-        "investor should do and why>\n"
-        "RISK_LEVEL: <LOW, MEDIUM, or HIGH>\n"
-        "RISK_REASONING: <one or two sentences explaining the risk level — "
-        "e.g. thin evidence, conflicting signals, high volatility>\n"
-        "SUGGESTED_ENTRY: <ALWAYS give concrete guidance, even if the verdict "
-        "is not to buy right now. If bullish: a price level or condition that "
-        "would make entry attractive. If bearish or neutral: the specific price "
-        "level, event, or condition that would need to change before this "
-        "becomes attractive (e.g. 'a pullback to $X' or 'confirmation of Y "
-        "trend' or 'stronger volume/news catalyst'). Never say Not applicable.>\n"
-        "SUGGESTED_STOP_LOSS: <ALWAYS give a concrete price level or condition "
-        "that would mean the thesis was wrong and you should sell to limit "
-        "losses. If not long, describe what would confirm avoiding/shorting "
-        "is correct. Never say Not applicable.>\n"
-        "SUGGESTED_TAKE_PROFIT: <ALWAYS give a concrete price level, percentage "
-        "gain, or condition (e.g. reaching a prior high, a specific resistance "
-        "level, or a valuation getting stretched) at which a holder should sell "
-        "to realize gains if the trade goes well. Be specific with a number or "
-        "level where the evidence supports one. Never say Not applicable.>\n\n"
-        "Do not present RISK_LEVEL as a numeric probability — it is a qualitative "
-        "judgment, not a statistical forecast."
-    )
-    judge_user = (
-        f"{evidence_block}\n\n"
-        f"BULL CASE:\n{bull_case}\n\n"
-        f"BEAR CASE:\n{bear_case}"
-    )
-
-    try:
-        judge_response = client.chat(judge_system, judge_user, temperature=0.2)
-    except RuntimeError as e:
-        judge_response = (
-            f"VERDICT: Unable to reach the local LLM ({e}).\n"
-            "RISK_LEVEL: MEDIUM\n"
-            "RISK_REASONING: No synthesis available — judge agent unavailable.\n"
-            "SUGGESTED_ENTRY: Cannot assess — local LLM unreachable, no analysis possible right now.\n"
-            "SUGGESTED_STOP_LOSS: Cannot assess — local LLM unreachable, no analysis possible right now.\n"
-            "SUGGESTED_TAKE_PROFIT: Cannot assess — local LLM unreachable, no analysis possible right now."
+def _build_bull_prompt(evidence_block: str, history: str, bear_latest: str) -> str:
+    """Build the bull researcher's prompt for the current round."""
+    if not bear_latest:
+        return (
+            f"You are a Bull Analyst advocating for BUYING this stock. "
+            f"Build the strongest honest case using the evidence below. "
+            f"Cite specific facts. If evidence is weak, say so plainly. "
+            f"Keep it to 3-5 sentences.\n\n"
+            f"EVIDENCE:\n{evidence_block}"
         )
-
-    parsed = _parse_judge_response(judge_response)
-
-    return DebateResult(
-        symbol=instrument.symbol,
-        bull_case=bull_case,
-        bear_case=bear_case,
-        verdict=parsed["verdict"],
-        risk_level=parsed["risk_level"],
-        risk_reasoning=parsed["risk_reasoning"],
-        suggested_entry=parsed["suggested_entry"],
-        suggested_stop_loss=parsed["suggested_stop_loss"],
-        suggested_take_profit=parsed["suggested_take_profit"],
-        evidence_summary={
-            "bars_count": evidence["bars_count"],
-            "news_count": evidence["news_count"],
-            "congress_count": evidence["congress_count"],
-        },
+    return (
+        f"You are a Bull Analyst in a multi-round debate. The Bear Analyst "
+        f"just argued against buying this stock. Counter their points with "
+        f"specific evidence and reasoning. Address their concerns directly — "
+        f"don't just repeat your opening argument. Keep it to 3-5 sentences.\n\n"
+        f"EVIDENCE:\n{evidence_block}\n\n"
+        f"DEBATE SO FAR:\n{history}\n\n"
+        f"BEAR'S LATEST ARGUMENT:\n{bear_latest}"
     )
 
 
-def _parse_judge_response(text: str) -> dict:
+def _build_bear_prompt(evidence_block: str, history: str, bull_latest: str) -> str:
+    """Build the bear researcher's prompt for the current round."""
+    if not bull_latest:
+        return (
+            f"You are a Bear Analyst advocating for SELLING or AVOIDING this stock. "
+            f"Build the strongest honest case using the evidence below. "
+            f"Cite specific facts. If evidence is weak, say so plainly. "
+            f"Keep it to 3-5 sentences.\n\n"
+            f"EVIDENCE:\n{evidence_block}"
+        )
+    return (
+        f"You are a Bear Analyst in a multi-round debate. The Bull Analyst "
+        f"just argued for buying this stock. Counter their points with "
+        f"specific evidence and reasoning. Address their concerns directly — "
+        f"don't just repeat your opening argument. Keep it to 3-5 sentences.\n\n"
+        f"EVIDENCE:\n{evidence_block}\n\n"
+        f"DEBATE SO FAR:\n{history}\n\n"
+        f"BULL'S LATEST ARGUMENT:\n{bull_latest}"
+    )
+
+
+JUDGE_SYSTEM = (
+    "You are a neutral Research Manager synthesizing a bull/bear debate into "
+    "a final verdict. You have no prior opinion on this stock. Weigh both "
+    "arguments on their merits — do not automatically split the difference. "
+    "The bull and bear have debated over multiple rounds; look for which side "
+    "addressed the other's counterpoints more effectively.\n\n"
+    "Respond with a JSON object with these fields:\n"
+    '  "verdict": string — one or two sentences, plain language, what a reasonable investor should do and why\n'
+    '  "risk_level": one of ["LOW", "MEDIUM", "HIGH"]\n'
+    '  "risk_reasoning": string — one or two sentences explaining the risk level\n'
+    '  "suggested_entry": string — ALWAYS give concrete guidance (price level, condition, or what needs to change)\n'
+    '  "suggested_stop_loss": string — ALWAYS give a concrete price level or condition\n'
+    '  "suggested_take_profit": string — ALWAYS give a concrete price level, percentage, or condition\n\n'
+    "Return ONLY the JSON object."
+)
+
+
+def _parse_judge_text(text: str) -> JudgeVerdict:
+    """Fallback: parse judge response from free text if JSON extraction fails."""
     fields = {
         "verdict": "", "risk_level": "MEDIUM", "risk_reasoning": "",
         "suggested_entry": "", "suggested_stop_loss": "", "suggested_take_profit": "",
     }
     key_map = {
-        "VERDICT": "verdict",
-        "RISK_LEVEL": "risk_level",
-        "RISK_REASONING": "risk_reasoning",
-        "SUGGESTED_ENTRY": "suggested_entry",
-        "SUGGESTED_STOP_LOSS": "suggested_stop_loss",
-        "SUGGESTED_TAKE_PROFIT": "suggested_take_profit",
+        "VERDICT": "verdict", "RISK_LEVEL": "risk_level",
+        "RISK_REASONING": "risk_reasoning", "SUGGESTED_ENTRY": "suggested_entry",
+        "SUGGESTED_STOP_LOSS": "suggested_stop_loss", "SUGGESTED_TAKE_PROFIT": "suggested_take_profit",
     }
     for line in text.splitlines():
         line = line.strip()
@@ -226,12 +188,116 @@ def _parse_judge_response(text: str) -> dict:
                 fields[key] = line.split(":", 1)[1].strip()
                 break
 
-    if fields["risk_level"].upper() not in ("LOW", "MEDIUM", "HIGH"):
-        fields["risk_level"] = "MEDIUM"
-    else:
-        fields["risk_level"] = fields["risk_level"].upper()
+    try:
+        return JudgeVerdict(**fields)
+    except Exception:
+        # Last resort: wrap the whole text as verdict
+        return JudgeVerdict(
+            verdict=text[:500],
+            risk_level=RiskLevel.MEDIUM,
+            risk_reasoning="Could not parse structured response.",
+            suggested_entry="Unable to determine from available evidence.",
+            suggested_stop_loss="Unable to determine from available evidence.",
+            suggested_take_profit="Unable to determine from available evidence.",
+        )
 
-    if not fields["verdict"]:
-        fields["verdict"] = text[:500]
 
-    return fields
+async def run_debate(
+    db: AsyncSession,
+    instrument_id,
+    num_rounds: int = DEFAULT_DEBATE_ROUNDS,
+) -> DebateResult:
+    """Run a multi-round bull/bear debate and return structured result.
+
+    Args:
+        db: Database session
+        instrument_id: UUID of the instrument to analyze
+        num_rounds: Number of debate rounds (default: 2)
+
+    Returns:
+        DebateResult with all rounds preserved and structured judge verdict.
+    """
+    result = await db.execute(select(Instrument).where(Instrument.id == instrument_id))
+    instrument = result.scalar_one_or_none()
+    if not instrument:
+        raise ValueError("Instrument not found")
+
+    evidence = await _gather_evidence(db, instrument)
+    evidence_block = _build_evidence_block(evidence)
+    client = OllamaClient()
+
+    # Multi-round debate
+    bull_history = ""
+    bear_history = ""
+    bull_latest = ""
+    bear_latest = ""
+
+    for round_num in range(num_rounds):
+        # Bull argues
+        bull_prompt = _build_bull_prompt(evidence_block, bull_history, bear_latest)
+        try:
+            bull_response = client.chat(
+                "You are a bullish equity analyst. Cite specific facts. Be concise.",
+                bull_prompt,
+                temperature=0.4,
+            )
+        except RuntimeError as e:
+            bull_response = f"(Bull agent unavailable: {e})"
+
+        bull_arg = f"[Round {round_num + 1}] Bull Analyst: {bull_response}"
+        bull_latest = bull_response
+        bull_history += ("\n" if bull_history else "") + bull_arg
+
+        # Bear argues
+        bear_prompt = _build_bear_prompt(evidence_block, bear_history, bull_latest)
+        try:
+            bear_response = client.chat(
+                "You are a bearish equity analyst. Cite specific facts. Be concise.",
+                bear_prompt,
+                temperature=0.4,
+            )
+        except RuntimeError as e:
+            bear_response = f"(Bear agent unavailable: {e})"
+
+        bear_arg = f"[Round {round_num + 1}] Bear Analyst: {bear_response}"
+        bear_latest = bear_response
+        bear_history += ("\n" if bear_history else "") + bear_arg
+
+    # Build full debate transcript for the judge
+    full_debate = f"BULL CASE:\n{bull_history}\n\nBEAR CASE:\n{bear_history}"
+    judge_user = f"{evidence_block}\n\n{full_debate}"
+
+    # Judge with structured output
+    judge = structured_chat(
+        client, JUDGE_SYSTEM, judge_user,
+        schema=JudgeVerdict,
+        temperature=0.2,
+    )
+
+    if judge is None:
+        # Fallback: try free-text parse
+        try:
+            raw_judge = client.chat(JUDGE_SYSTEM, judge_user, temperature=0.2)
+            judge = _parse_judge_text(raw_judge)
+        except RuntimeError:
+            judge = JudgeVerdict(
+                verdict="Unable to reach the LLM for synthesis.",
+                risk_level=RiskLevel.MEDIUM,
+                risk_reasoning="No synthesis available — judge agent unavailable.",
+                suggested_entry="Cannot assess — LLM unreachable.",
+                suggested_stop_loss="Cannot assess — LLM unreachable.",
+                suggested_take_profit="Cannot assess — LLM unreachable.",
+            )
+
+    return DebateResult.from_judge(
+        symbol=instrument.symbol,
+        bull_case=bull_history,
+        bear_case=bear_history,
+        rounds=num_rounds,
+        judge=judge,
+        evidence={
+            "bars_count": evidence["bars_count"],
+            "news_count": evidence["news_count"],
+            "congress_count": evidence["congress_count"],
+        },
+    )

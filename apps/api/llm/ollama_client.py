@@ -17,24 +17,36 @@ class OllamaClient:
         self.base_url = (base_url or get_settings().llm_base_url).rstrip("/")
         self.model = model or get_settings().llm_model
 
-    def chat(self, system: str, user: str, temperature: float = 0.4, timeout: int = 120) -> str:
+    def chat(self, system: str, user: str, temperature: float = 0.4,
+             timeout: int = 120, format: str | None = None) -> str:
         """Send a single-turn chat request and return the model's text response.
+
+        Args:
+            system: System prompt
+            user: User prompt
+            temperature: Sampling temperature
+            timeout: Request timeout in seconds
+            format: Response format — set to "json" for JSON mode output.
 
         Raises RuntimeError on any failure — callers should catch this and
         degrade gracefully (e.g. skip the LLM-based portion of a signal).
         """
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "options": {"temperature": temperature},
+        }
+        if format:
+            payload["format"] = format
+
         try:
             resp = requests.post(
                 f"{self.base_url}/api/chat",
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    "stream": False,
-                    "options": {"temperature": temperature},
-                },
+                json=payload,
                 timeout=timeout,
             )
             resp.raise_for_status()

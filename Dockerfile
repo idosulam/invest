@@ -20,9 +20,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir .
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Python deps — install from lockfile for reproducible builds
+COPY pyproject.toml uv.lock .
+RUN uv sync --frozen --no-dev
 
 COPY . .
 
@@ -31,4 +34,4 @@ COPY --from=frontend /build/apps/web/out apps/web/out
 
 EXPOSE 8000
 
-CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
