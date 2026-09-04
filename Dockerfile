@@ -25,7 +25,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Python deps — install from lockfile for reproducible builds
 COPY pyproject.toml uv.lock .
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev && \
+    # Make sure the venv binaries are accessible
+    ln -s /app/.venv/bin/* /usr/local/bin/ 2>/dev/null || true
 
 COPY . .
 
@@ -34,4 +36,4 @@ COPY --from=frontend /build/apps/web/out apps/web/out
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD [".venv/bin/uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
