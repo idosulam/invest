@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Compass, TrendingUp, TrendingDown, Plus, Loader2, Check } from "lucide-react";
+import { Compass, TrendingUp, TrendingDown, Plus, Loader2, Check, Sparkles, X } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Header } from "@/components/layout/Header";
 import { format } from "@/lib/format";
@@ -32,6 +32,9 @@ export default function DiscoverPage() {
   const [error, setError] = useState("");
   const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
   const [addedSymbols, setAddedSymbols] = useState<Set<string>>(new Set());
+  const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState("");
 
   const runDiscovery = async (screenerValue: string) => {
     setLoading(true);
@@ -65,6 +68,56 @@ export default function DiscoverPage() {
       alert(`Failed to add ${result.symbol}. It may already exist.`);
     } finally {
       setAddingSymbol(null);
+    }
+  };
+
+  const handleAnalyze = async (result: DiscoveryResult) => {
+    setAnalyzingSymbol(result.symbol);
+    setAnalysisError("");
+    setAnalysisResult(null);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // Ensure instrument exists
+      let instrumentId: string | null = null;
+      try {
+        const createRes = await instrumentsApi.create({
+          symbol: result.symbol,
+          name: result.name || result.symbol,
+          type: "STOCK",
+          currency: "USD",
+        });
+        instrumentId = createRes.id;
+        setAddedSymbols((prev) => new Set(prev).add(result.symbol));
+      } catch {
+        // Already exists — find it
+        const searchRes = await fetch(`/api/v1/instruments?search=${result.symbol}&page_size=1`, {
+          headers: authHeader,
+        });
+        if (searchRes.ok) {
+          const data = await searchRes.json();
+          instrumentId = data.items?.[0]?.id;
+        }
+      }
+
+      if (!instrumentId) {
+        setAnalysisError(`Could not find instrument ${result.symbol}`);
+        return;
+      }
+
+      // Run consolidated analysis
+      const res = await fetch(`/api/v1/signals/consolidated/${instrumentId}`, {
+        method: "POST",
+        headers: authHeader,
+      });
+      if (!res.ok) throw new Error("Analysis failed");
+      const data = await res.json();
+      setAnalysisResult(data);
+    } catch (err: any) {
+      setAnalysisError(err.message || "Analysis failed");
+    } finally {
+      setAnalyzingSymbol(null);
     }
   };
 
@@ -148,24 +201,39 @@ export default function DiscoverPage() {
                         {r.market_cap != null ? format.compact(r.market_cap) : "—"}
                       </td>
                       <td className="py-2.5 px-3 text-right">
-                        {alreadyAdded ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-surface-500">
-                            <Check className="w-3.5 h-3.5" /> Tracked
-                          </span>
-                        ) : (
+                        <div className="inline-flex items-center gap-1.5">
                           <button
-                            onClick={() => handleAdd(r)}
-                            disabled={addingSymbol === r.symbol}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-50"
+                            onClick={() => handleAnalyze(r)}
+                            disabled={analyzingSymbol === r.symbol}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-50 disabled:opacity-50"
                           >
-                            {addingSymbol === r.symbol ? (
+                            {analyzingSymbol === r.symbol ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
                             ) : (
-                              <Plus className="w-3 h-3" />
+                              <Sparkles className="w-3 h-3" />
                             )}
-                            Add
+                            Analyze
                           </button>
-                        )}
+                          {!alreadyAdded && (
+                            <button
+                              onClick={() => handleAdd(r)}
+                              disabled={addingSymbol === r.symbol}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-50"
+                            >
+                              {addingSymbol === r.symbol ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Plus className="w-3 h-3" />
+                              )}
+                              Add
+                            </button>
+                          )}
+                          {alreadyAdded && !analyzingSymbol && (
+                            <span className="inline-flex items-center gap-1 text-xs text-surface-500">
+                              <Check className="w-3.5 h-3.5" /> Tracked
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -175,6 +243,118 @@ export default function DiscoverPage() {
           </div>
         )}
       </Card>
+
+      {/* Analysis Results */}
+      {analysisError && (
+        <Card className="mt-4 border-danger-200">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-danger-600">{analysisError}</p>
+            <button onClick={() => setAnalysisError("")} className="text-xs text-surface-500 hover:text-surface-900">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </Card>
+      )}
+      {analyzingSymbol && !analysisResult && (
+        <Card className="mt-4">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
+            <p className="text-sm text-surface-700">Running full analysis on {analyzingSymbol}...</p>
+          </div>
+        </Card>
+      )}
+      {analysisResult && (
+        <Card className="mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-surface-900">Analysis: {analysisResult.symbol}</p>
+            <div className="flex items-center gap-2">
+              <a
+                href={`/instruments/view?id=${analysisResult.instrument_id}`}
+                className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+              >
+                View Chart →
+              </a>
+              <button onClick={() => setAnalysisResult(null)} className="text-xs text-surface-500 hover:text-surface-900">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 mb-3">
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-bold ${
+                analysisResult.final_state === "ENTER_LONG"
+                  ? "bg-green-50 text-success-600"
+                  : analysisResult.final_state === "EXIT"
+                  ? "bg-red-50 text-danger-600"
+                  : analysisResult.final_state === "REDUCE"
+                  ? "bg-amber-50 text-warning-600"
+                  : "bg-surface-100 text-surface-700"
+              }`}
+            >
+              {analysisResult.final_state === "ENTER_LONG" ? "BUY" :
+               analysisResult.final_state === "EXIT" ? "SELL" :
+               analysisResult.final_state === "REDUCE" ? "REDUCE" :
+               analysisResult.final_state === "WATCH" ? "WATCH" : "HOLD"}
+            </span>
+            <span className="text-xs text-surface-500">
+              {Math.round(analysisResult.final_confidence)}% confidence
+            </span>
+            {!analysisResult.llm_used && (
+              <span className="text-xs text-warning-600">(mechanical vote only)</span>
+            )}
+          </div>
+
+          <p className="text-sm text-surface-700 mb-3">{analysisResult.summary}</p>
+
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-medium text-surface-900">Risk:</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                analysisResult.risk_level === "LOW"
+                  ? "bg-green-50 text-success-600"
+                  : analysisResult.risk_level === "HIGH"
+                  ? "bg-red-50 text-danger-600"
+                  : "bg-amber-50 text-warning-600"
+              }`}
+            >
+              {analysisResult.risk_level}
+            </span>
+            <span className="text-xs text-surface-500">{analysisResult.risk_reasoning}</span>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4 mb-3">
+            <div>
+              <p className="text-xs font-medium text-surface-900 mb-1">Entry</p>
+              <p className="text-sm text-surface-700">{analysisResult.entry_zone}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-danger-600 mb-1">Stop-Loss</p>
+              <p className="text-sm text-surface-700">{analysisResult.stop_loss}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-success-600 mb-1">Take-Profit</p>
+              <p className="text-sm text-surface-700">{analysisResult.take_profit}</p>
+            </div>
+          </div>
+
+          {analysisResult.strategy_breakdown?.length > 0 && (
+            <details className="pt-3 border-t border-surface-200">
+              <summary className="text-xs font-medium text-surface-900 cursor-pointer">
+                Strategy breakdown ({analysisResult.strategy_breakdown.length})
+              </summary>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {analysisResult.strategy_breakdown.map((s: any, i: number) => (
+                  <span key={i} className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700">
+                    {s.strategy}: {s.state}
+                    {s.win_rate != null && <span className="ml-1 text-surface-500">({s.win_rate.toFixed(0)}% WR)</span>}
+                  </span>
+                ))}
+              </div>
+            </details>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
