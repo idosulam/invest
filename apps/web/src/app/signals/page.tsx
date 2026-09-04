@@ -370,31 +370,59 @@ export default function SignalsPage() {
   const [runningFull, setRunningFull] = useState(false);
   const [fullAnalysisError, setFullAnalysisError] = useState("");
   const [fullAnalysisProgress, setFullAnalysisProgress] = useState("");
+  const [analysisMode, setAnalysisMode] = useState<"portfolio" | "discover" | null>(null);
 
-  const runFullAnalysis = async () => {
+  const runFullAnalysis = async (mode: "portfolio" | "discover") => {
     setRunningFull(true);
     setFullAnalysisError("");
     setFullAnalysisResults([]);
-    setFullAnalysisProgress("Loading tracked instruments...");
+    setAnalysisMode(mode);
+
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-      const instRes = await fetch("/api/v1/instruments?page_size=100", { headers: authHeader });
-      if (!instRes.ok) throw new Error("Failed to load instruments");
-      const instData = await instRes.json();
-      const allInstruments = instData.items || [];
+      let instrumentsToAnalyze: { id: string; symbol: string }[] = [];
 
-      if (allInstruments.length === 0) {
-        setFullAnalysisError("No instruments tracked yet — add some first.");
-        setRunningFull(false);
-        return;
+      if (mode === "portfolio") {
+        setFullAnalysisProgress("Loading portfolio holdings...");
+        const portRes = await fetch("/api/v1/portfolios", { headers: authHeader });
+        if (!portRes.ok) throw new Error("Failed to load portfolios");
+        const portfolios = await portRes.json();
+        if (portfolios.length === 0) {
+          setFullAnalysisError("No portfolios found — create one and add positions first.");
+          setRunningFull(false);
+          return;
+        }
+        // Use the first portfolio
+        const posRes = await fetch(`/api/v1/portfolios/${portfolios[0].id}/positions`, { headers: authHeader });
+        if (!posRes.ok) throw new Error("Failed to load positions");
+        const positions = await posRes.json();
+        instrumentsToAnalyze = positions.map((p: any) => ({ id: p.instrument_id, symbol: p.symbol }));
+
+        if (instrumentsToAnalyze.length === 0) {
+          setFullAnalysisError("Portfolio is empty — add some positions first.");
+          setRunningFull(false);
+          return;
+        }
+      } else {
+        setFullAnalysisProgress("Loading tracked instruments...");
+        const instRes = await fetch("/api/v1/instruments?page_size=100", { headers: authHeader });
+        if (!instRes.ok) throw new Error("Failed to load instruments");
+        const instData = await instRes.json();
+        instrumentsToAnalyze = (instData.items || []).map((i: any) => ({ id: i.id, symbol: i.symbol }));
+
+        if (instrumentsToAnalyze.length === 0) {
+          setFullAnalysisError("No instruments tracked yet — add some first.");
+          setRunningFull(false);
+          return;
+        }
       }
 
       const results: any[] = [];
-      for (let i = 0; i < allInstruments.length; i++) {
-        const inst = allInstruments[i];
-        setFullAnalysisProgress(`Analyzing ${inst.symbol} (${i + 1}/${allInstruments.length})...`);
+      for (let i = 0; i < instrumentsToAnalyze.length; i++) {
+        const inst = instrumentsToAnalyze[i];
+        setFullAnalysisProgress(`Analyzing ${inst.symbol} (${i + 1}/${instrumentsToAnalyze.length})...`);
         try {
           const res = await fetch(`/api/v1/signals/consolidated/${inst.id}`, {
             method: "POST",
@@ -414,7 +442,7 @@ export default function SignalsPage() {
       setFullAnalysisResults(results);
       setFullAnalysisProgress("");
 
-      // Refresh the raw signals list underneath (used by the technical detail toggle)
+      // Refresh the raw signals list underneath
       const params = new URLSearchParams();
       params.set("page_size", "100");
       if (horizonFilter) params.set("horizon", horizonFilter);
@@ -480,14 +508,24 @@ export default function SignalsPage() {
               {generating ? "Generating..." : "Generate"}
             </button>
             <button
-              onClick={runFullAnalysis}
+              onClick={() => runFullAnalysis("portfolio")}
               disabled={runningFull}
-              title="Runs technical strategies + Bull/Bear/Judge analysis for every tracked instrument"
+              title="Run full analysis on your portfolio holdings with entry/stop/take profit recommendations"
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
             >
-              {runningFull
+              {runningFull && analysisMode === "portfolio"
                 ? fullAnalysisProgress || "Analyzing..."
-                : "Run Full Analysis (all stocks)"}
+                : "Portfolio Analysis"}
+            </button>
+            <button
+              onClick={() => runFullAnalysis("discover")}
+              disabled={runningFull}
+              title="Discover & analyze all tracked instruments with entry/stop/take profit recommendations"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {runningFull && analysisMode === "discover"
+                ? fullAnalysisProgress || "Analyzing..."
+                : "Discover → Analyze"}
             </button>
             <select
               value={horizonFilter}
@@ -553,6 +591,7 @@ export default function SignalsPage() {
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-surface-900">
               Final Verdicts — {fullAnalysisResults.length} stocks
+              {analysisMode === "portfolio" ? " (Portfolio)" : " (All Tracked)"}
             </p>
             <button
               onClick={() => setFullAnalysisResults([])}

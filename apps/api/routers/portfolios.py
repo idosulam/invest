@@ -522,6 +522,39 @@ async def _upsert_position(
     return position
 
 
+@router.delete("/{portfolio_id}/positions/{position_id}", status_code=204)
+async def delete_position(
+    portfolio_id: uuid.UUID,
+    position_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a position from a portfolio."""
+    # Verify ownership
+    port_result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.owner_id == current_user.id,
+        )
+    )
+    if not port_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    # Find position
+    pos_result = await db.execute(
+        select(Position).where(
+            Position.id == position_id,
+            Position.portfolio_id == portfolio_id,
+        )
+    )
+    position = pos_result.scalar_one_or_none()
+    if not position:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    await db.delete(position)
+    await db.flush()
+
+
 @router.post("/{portfolio_id}/add-position", response_model=list[PositionResponse], status_code=201)
 async def add_position(
     portfolio_id: uuid.UUID,

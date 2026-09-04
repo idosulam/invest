@@ -151,6 +151,8 @@ export const portfolios = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deletePosition: (portfolioId: string, positionId: string) =>
+    request<void>(`/portfolios/${portfolioId}/positions/${positionId}`, { method: "DELETE" }),
   bulkImport: (portfolioId: string, positions: { symbol: string; quantity: number; avg_cost: number }[]) =>
     request<any>(`/portfolios/${portfolioId}/bulk-import`, {
       method: "POST",
