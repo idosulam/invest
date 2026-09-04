@@ -35,6 +35,7 @@ export default function DiscoverPage() {
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [analysisError, setAnalysisError] = useState("");
+  const [navigatingSymbol, setNavigatingSymbol] = useState<string | null>(null);
 
   const runDiscovery = async (screenerValue: string) => {
     setLoading(true);
@@ -68,6 +69,34 @@ export default function DiscoverPage() {
       alert(`Failed to add ${result.symbol}. It may already exist.`);
     } finally {
       setAddingSymbol(null);
+    }
+  };
+
+  const handleOpenChart = async (result: DiscoveryResult) => {
+    setNavigatingSymbol(result.symbol);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      try {
+        const createRes = await instrumentsApi.create({
+          symbol: result.symbol,
+          name: result.name || result.symbol,
+          type: "STOCK",
+          currency: "USD",
+        });
+        window.location.href = `/instruments/view?id=${createRes.id}`;
+      } catch {
+        const searchRes = await fetch(`/api/v1/instruments?search=${result.symbol}&page_size=1`, { headers: authHeader });
+        if (searchRes.ok) {
+          const data = await searchRes.json();
+          const id = data.items?.[0]?.id;
+          if (id) window.location.href = `/instruments/view?id=${id}`;
+        }
+      }
+    } catch (err) {
+      alert(`Failed to open ${result.symbol}`);
+    } finally {
+      setNavigatingSymbol(null);
     }
   };
 
@@ -182,8 +211,14 @@ export default function DiscoverPage() {
                   const isPositive = (r.change_pct ?? 0) >= 0;
                   const alreadyAdded = r.already_tracked || addedSymbols.has(r.symbol);
                   return (
-                    <tr key={r.symbol} className="border-b border-surface-100 hover:bg-surface-50">
-                      <td className="py-2.5 px-3 font-semibold text-primary-600">{r.symbol}</td>
+                    <tr
+                      key={r.symbol}
+                      className="border-b border-surface-100 hover:bg-surface-50 cursor-pointer"
+                      onClick={() => handleOpenChart(r)}
+                    >
+                      <td className="py-2.5 px-3 font-semibold text-primary-600">
+                        {navigatingSymbol === r.symbol ? <Loader2 className="w-4 h-4 animate-spin inline" /> : r.symbol}
+                      </td>
                       <td className="py-2.5 px-3 text-surface-900">{r.name ?? "—"}</td>
                       <td className="py-2.5 px-3 text-right font-mono">
                         {r.last_price != null ? format.currency(r.last_price) : "—"}
@@ -203,7 +238,7 @@ export default function DiscoverPage() {
                       <td className="py-2.5 px-3 text-right">
                         <div className="inline-flex items-center gap-1.5">
                           <button
-                            onClick={() => handleAnalyze(r)}
+                            onClick={(e) => { e.stopPropagation(); handleAnalyze(r); }}
                             disabled={analyzingSymbol === r.symbol}
                             className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-50 disabled:opacity-50"
                           >
@@ -216,7 +251,7 @@ export default function DiscoverPage() {
                           </button>
                           {!alreadyAdded && (
                             <button
-                              onClick={() => handleAdd(r)}
+                              onClick={(e) => { e.stopPropagation(); handleAdd(r); }}
                               disabled={addingSymbol === r.symbol}
                               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-50"
                             >
