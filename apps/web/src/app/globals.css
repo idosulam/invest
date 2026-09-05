@@ -15,9 +15,7 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Improve secondary text contrast */
-.text-surface-400 { color: #9ca3af !important; }
-.text-surface-500 { color: #d1d5db !important; }
+
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
