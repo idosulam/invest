@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 241, 245, 249;
-  --background-rgb: 15, 23, 42;
-  --card-rgb: 30, 41, 59;
-  --card-border-rgb: 51, 65, 85;
+  --foreground-rgb: 248, 250, 252;
+  --background-rgb: 8, 12, 21;
+  --card-rgb: 17, 24, 39;
+  --card-border-rgb: 55, 65, 81;
 }
 
 body {
@@ -14,6 +14,10 @@ body {
   background: rgb(var(--background-rgb));
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* Improve secondary text contrast */
+.text-surface-400 { color: #9ca3af !important; }
+.text-surface-500 { color: #d1d5db !important; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
