@@ -202,9 +202,9 @@ export default function WatchlistsPage() {
                     {detail?.instruments.map((inst) => {
                       const href = `/instruments/view?id=${inst.id}`;
                       return (
-                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer" onClick={() => window.location.href = href}>
+                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors">
                         <td className="py-2.5 px-3">
-                          <span className="font-semibold text-primary-400">{inst.symbol}</span>
+                          <a href={href} className="font-semibold text-primary-400 hover:text-primary-300">{inst.symbol}</a>
                         </td>
                         <td className="py-2.5 px-3 text-surface-600">{inst.name}</td>
                         <td className="py-2.5 px-3">
@@ -219,7 +219,7 @@ export default function WatchlistsPage() {
                         <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <span className="text-primary-400 text-[12px] font-medium">Chart →</span>
-                            <button onClick={(e) => { e.stopPropagation(); removeInstrument(inst.id); }} className="p-1 text-surface-400 hover:text-danger-400">
+                            <button onClick={() => removeInstrument(inst.id)} className="p-1 text-surface-400 hover:text-danger-400">
                               <X className="w-3 h-3" />
                             </button>
                           </div>

@@ -511,11 +511,10 @@ export default function ScannerPage() {
                     {results.map((r) => (
                       <tr
                         key={r.instrument_id}
-                        className="border-b border-surface-200 hover:bg-surface-200 cursor-pointer"
-                        onClick={() => window.location.href = `/instruments/view?id=${r.instrument_id}`}
+                        className="border-b border-surface-200 hover:bg-surface-200"
                       >
                         <td className="py-2 px-2">
-                          <span className="font-semibold text-primary-400">{r.symbol}</span>
+                          <a href={`/instruments/view?id=${r.instrument_id}`} className="font-semibold text-primary-400 hover:text-primary-300">{r.symbol}</a>
                         </td>
                         <td className="py-2 px-2 text-surface-900 max-w-[150px] truncate">
                           {r.name}

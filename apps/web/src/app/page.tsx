@@ -146,11 +146,10 @@ export default function DashboardPage() {
                     return (
                     <tr
                       key={inst.id}
-                      className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer"
-                      onClick={() => window.location.href = href}
+                      className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors"
                     >
                       <td className="py-2.5 px-4">
-                        <span className="font-semibold text-primary-400">{inst.symbol}</span>
+                        <a href={href} className="font-semibold text-primary-400 hover:text-primary-300">{inst.symbol}</a>
                       </td>
                       <td className="py-2.5 px-4 text-surface-600">{inst.name}</td>
                       <td className="py-2.5 px-4">
