@@ -141,19 +141,16 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {instruments.map((inst) => (
+                  {instruments.map((inst) => {
+                    const href = `/instruments/view?id=${inst.id}`;
+                    return (
                     <tr
                       key={inst.id}
                       className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer"
-                      onClick={() => window.location.href = `/instruments/view?id=${inst.id}`}
+                      onClick={() => window.location.href = href}
                     >
                       <td className="py-2.5 px-4">
-                        <Link
-                          href={`/instruments/view?id=${inst.id}`}
-                          className="font-semibold text-primary-400 hover:text-primary-300"
-                        >
-                          {inst.symbol}
-                        </Link>
+                        <span className="font-semibold text-primary-400">{inst.symbol}</span>
                       </td>
                       <td className="py-2.5 px-4 text-surface-600">{inst.name}</td>
                       <td className="py-2.5 px-4">
@@ -176,15 +173,11 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="py-2.5 px-4 text-right">
-                        <Link
-                          href={`/instruments/view?id=${inst.id}`}
-                          className="text-primary-400 hover:text-primary-300 text-[12px] font-medium"
-                        >
-                          Chart →
-                        </Link>
+                        <span className="text-primary-400 text-[12px] font-medium">Chart →</span>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

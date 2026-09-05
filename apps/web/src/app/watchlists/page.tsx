@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { ListOrdered, Plus, Trash2, Eye, X, Search } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Header } from "@/components/layout/Header";
@@ -200,12 +199,12 @@ export default function WatchlistsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {detail?.instruments.map((inst) => (
-                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/instruments/view?id=${inst.id}`}>
+                    {detail?.instruments.map((inst) => {
+                      const href = `/instruments/view?id=${inst.id}`;
+                      return (
+                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer" onClick={() => window.location.href = href}>
                         <td className="py-2.5 px-3">
-                          <Link href={`/instruments/view?id=${inst.id}`} className="font-semibold text-primary-400 hover:text-primary-300">
-                            {inst.symbol}
-                          </Link>
+                          <span className="font-semibold text-primary-400">{inst.symbol}</span>
                         </td>
                         <td className="py-2.5 px-3 text-surface-600">{inst.name}</td>
                         <td className="py-2.5 px-3">
@@ -219,16 +218,15 @@ export default function WatchlistsPage() {
                         </td>
                         <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <Link href={`/instruments/view?id=${inst.id}`} className="text-primary-400 hover:text-primary-300 text-[12px] font-medium">
-                              Chart →
-                            </Link>
-                            <button onClick={() => removeInstrument(inst.id)} className="p-1 text-surface-400 hover:text-danger-400">
+                            <span className="text-primary-400 text-[12px] font-medium">Chart →</span>
+                            <button onClick={(e) => { e.stopPropagation(); removeInstrument(inst.id); }} className="p-1 text-surface-400 hover:text-danger-400">
                               <X className="w-3 h-3" />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -515,12 +515,7 @@ export default function ScannerPage() {
                         onClick={() => window.location.href = `/instruments/view?id=${r.instrument_id}`}
                       >
                         <td className="py-2 px-2">
-                          <Link
-                            href={`/instruments/view?id=${r.instrument_id}`}
-                            className="font-semibold text-primary-400 hover:text-primary-300"
-                          >
-                            {r.symbol}
-                          </Link>
+                          <span className="font-semibold text-primary-400">{r.symbol}</span>
                         </td>
                         <td className="py-2 px-2 text-surface-900 max-w-[150px] truncate">
                           {r.name}
