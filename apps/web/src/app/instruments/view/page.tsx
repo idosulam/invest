@@ -86,6 +86,7 @@ export default function InstrumentWorkspacePage() {
   const [debateError, setDebateError] = useState("");
 
   const runDebate = async () => {
+    if (!instrumentId) return;
     setLoadingDebate(true);
     setDebateError("");
     try {
