@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ListOrdered, Plus, Trash2, Eye, X, Search } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Header } from "@/components/layout/Header";
@@ -204,7 +205,7 @@ export default function WatchlistsPage() {
                       return (
                       <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors">
                         <td className="py-2.5 px-3">
-                          <a href={href} className="font-semibold text-primary-400 hover:text-primary-300">{inst.symbol}</a>
+                          <Link href={href} className="font-semibold text-primary-400 hover:text-primary-300">{inst.symbol}</Link>
                         </td>
                         <td className="py-2.5 px-3 text-surface-600">{inst.name}</td>
                         <td className="py-2.5 px-3">

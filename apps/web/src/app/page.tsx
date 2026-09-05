@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Link from "next/link";
 import {
   TrendingUp,
   TrendingDown,
@@ -149,7 +150,7 @@ export default function DashboardPage() {
                       className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors"
                     >
                       <td className="py-2.5 px-4">
-                        <a href={href} className="font-semibold text-primary-400 hover:text-primary-300">{inst.symbol}</a>
+                        <Link href={href} className="font-semibold text-primary-400 hover:text-primary-300">{inst.symbol}</Link>
                       </td>
                       <td className="py-2.5 px-4 text-surface-600">{inst.name}</td>
                       <td className="py-2.5 px-4">

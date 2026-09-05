@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import {
-  ScanLine,
   Play,
   ChevronUp,
   ChevronDown,
@@ -514,7 +513,7 @@ export default function ScannerPage() {
                         className="border-b border-surface-200 hover:bg-surface-200"
                       >
                         <td className="py-2 px-2">
-                          <a href={`/instruments/view?id=${r.instrument_id}`} className="font-semibold text-primary-400 hover:text-primary-300">{r.symbol}</a>
+                          <Link href={`/instruments/view?id=${r.instrument_id}`} className="font-semibold text-primary-400 hover:text-primary-300">{r.symbol}</Link>
                         </td>
                         <td className="py-2 px-2 text-surface-900 max-w-[150px] truncate">
                           {r.name}
