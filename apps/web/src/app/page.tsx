@@ -144,7 +144,8 @@ export default function DashboardPage() {
                   {instruments.map((inst) => (
                     <tr
                       key={inst.id}
-                      className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors"
+                      className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer"
+                      onClick={() => window.location.href = `/instruments/view?id=${inst.id}`}
                     >
                       <td className="py-2.5 px-4">
                         <Link
@@ -209,9 +210,10 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {watchlists.map((wl) => (
-                <div
+                <Link
                   key={wl.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-surface-200/50 hover:bg-surface-200 transition-colors"
+                  href="/watchlists"
+                  className="flex items-center justify-between p-3 rounded-lg bg-surface-200/50 hover:bg-surface-200 transition-colors cursor-pointer"
                 >
                   <div>
                     <p className="text-[13px] font-medium text-surface-700">{wl.name}</p>
@@ -220,7 +222,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <Eye className="w-4 h-4 text-surface-400" />
-                </div>
+                </Link>
               ))}
             </div>
           )}

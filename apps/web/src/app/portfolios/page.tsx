@@ -346,7 +346,7 @@ function BulkImportModal({
 
         <button
           onClick={addRow}
-          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+          className="text-sm text-primary-400 hover:text-primary-300 font-medium"
         >
           + Add another
         </button>
@@ -864,7 +864,7 @@ export default function PortfoliosPage() {
                       <td className="py-2.5 px-3">
                         <Link
                           href={`/instruments/view?id=${pos.instrument_id}`}
-                          className="font-semibold text-primary-600 hover:text-primary-700"
+                          className="font-semibold text-primary-400 hover:text-primary-300"
                         >
                           {pos.symbol ?? "?"}
                         </Link>

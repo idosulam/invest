@@ -511,12 +511,13 @@ export default function ScannerPage() {
                     {results.map((r) => (
                       <tr
                         key={r.instrument_id}
-                        className="border-b border-surface-200 hover:bg-surface-200"
+                        className="border-b border-surface-200 hover:bg-surface-200 cursor-pointer"
+                        onClick={() => window.location.href = `/instruments/view?id=${r.instrument_id}`}
                       >
                         <td className="py-2 px-2">
                           <Link
                             href={`/instruments/view?id=${r.instrument_id}`}
-                            className="font-semibold text-primary-600 hover:text-primary-700"
+                            className="font-semibold text-primary-400 hover:text-primary-300"
                           >
                             {r.symbol}
                           </Link>
@@ -587,7 +588,7 @@ export default function ScannerPage() {
                         <td className="py-2 px-2 text-right">
                           <Link
                             href={`/instruments/view?id=${r.instrument_id}`}
-                            className="text-primary-600 hover:text-primary-700 text-xs font-medium"
+                            className="text-primary-400 hover:text-primary-300 text-xs font-medium"
                           >
                             Chart →
                           </Link>

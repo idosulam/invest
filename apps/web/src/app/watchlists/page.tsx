@@ -201,7 +201,7 @@ export default function WatchlistsPage() {
                   </thead>
                   <tbody>
                     {detail?.instruments.map((inst) => (
-                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors">
+                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/instruments/view?id=${inst.id}`}>
                         <td className="py-2.5 px-3">
                           <Link href={`/instruments/view?id=${inst.id}`} className="font-semibold text-primary-400 hover:text-primary-300">
                             {inst.symbol}
