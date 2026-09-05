@@ -8,10 +8,11 @@ const nextConfig = {
   async rewrites() {
     // In development, proxy API calls to FastAPI backend
     if (process.env.NODE_ENV !== "production") {
+      const apiHost = process.env.API_HOST || "http://localhost:8000";
       return [
         {
           source: "/api/:path*",
-          destination: "http://localhost:8000/api/:path*",
+          destination: `${apiHost}/api/:path*`,
         },
       ];
     }

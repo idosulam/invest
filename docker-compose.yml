@@ -93,6 +93,24 @@ services:
       - ./packages:/app/packages
     command: ["python", "-m", "apps.worker.main"]
 
+  # ── Frontend (Next.js dev) ────────────────────────────────
+  web:
+    image: node:20-slim
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - API_HOST=http://api:8000
+    depends_on:
+      - api
+
 volumes:
   pgdata:
   redisdata:
