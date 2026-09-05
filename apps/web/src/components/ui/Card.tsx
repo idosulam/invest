@@ -14,9 +14,9 @@ export function Card({ children, className, padding = "md", onClick }: CardProps
     <div
       onClick={onClick}
       className={clsx(
-        "bg-surface-800 rounded-xl border border-surface-200 shadow-sm",
+        "bg-surface-100 rounded-lg border border-surface-300",
         paddings[padding],
-        onClick && "cursor-pointer",
+        onClick && "cursor-pointer hover:border-surface-400 transition-colors",
         className,
       )}
     >
@@ -40,5 +40,5 @@ export function CardHeader({
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
-  return <h3 className="text-lg font-semibold text-white">{children}</h3>;
+  return <h3 className="text-base font-semibold text-surface-800">{children}</h3>;
 }

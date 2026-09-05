@@ -210,7 +210,7 @@ export default function BacktestsPage() {
                 type="text"
                 value={runForm.instrument_id}
                 onChange={(e) => setRunForm((f) => ({ ...f, instrument_id: e.target.value }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                 placeholder="UUID"
               />
             </div>
@@ -219,7 +219,7 @@ export default function BacktestsPage() {
               <select
                 value={runForm.strategy}
                 onChange={(e) => setRunForm((f) => ({ ...f, strategy: e.target.value }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               >
                 <option value="sma_crossover">SMA Crossover</option>
                 <option value="rsi_reversion">RSI Reversion</option>
@@ -230,7 +230,7 @@ export default function BacktestsPage() {
               <select
                 value={runForm.engine}
                 onChange={(e) => setRunForm((f) => ({ ...f, engine: e.target.value }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               >
                 <option value="vectorized">Vectorized</option>
                 <option value="event-driven">Event-Driven</option>
@@ -241,7 +241,7 @@ export default function BacktestsPage() {
               <select
                 value={runForm.timeframe}
                 onChange={(e) => setRunForm((f) => ({ ...f, timeframe: e.target.value }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               >
                 <option value="1D">Daily</option>
                 <option value="1H">Hourly</option>
@@ -255,7 +255,7 @@ export default function BacktestsPage() {
                 type="number"
                 value={runForm.fast_period}
                 onChange={(e) => setRunForm((f) => ({ ...f, fast_period: Number(e.target.value) }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               />
             </div>
             <div>
@@ -264,7 +264,7 @@ export default function BacktestsPage() {
                 type="number"
                 value={runForm.slow_period}
                 onChange={(e) => setRunForm((f) => ({ ...f, slow_period: Number(e.target.value) }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               />
             </div>
             <div>
@@ -274,7 +274,7 @@ export default function BacktestsPage() {
                 step="0.0001"
                 value={runForm.commission_pct}
                 onChange={(e) => setRunForm((f) => ({ ...f, commission_pct: Number(e.target.value) }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               />
             </div>
             <div>
@@ -284,7 +284,7 @@ export default function BacktestsPage() {
                 step="0.0001"
                 value={runForm.slippage_pct}
                 onChange={(e) => setRunForm((f) => ({ ...f, slippage_pct: Number(e.target.value) }))}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
               />
             </div>
           </div>
@@ -336,7 +336,7 @@ export default function BacktestsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-surface-200">
+                <tr className="border-b border-surface-300">
                   <th className="text-left py-1 px-2">Split</th>
                   <th className="text-right py-1 px-2">Return</th>
                   <th className="text-right py-1 px-2">Sharpe</th>
@@ -347,7 +347,7 @@ export default function BacktestsPage() {
               </thead>
               <tbody>
                 {walkForward.splits.map((s: any, i: number) => (
-                  <tr key={i} className="border-b border-surface-100">
+                  <tr key={i} className="border-b border-surface-200">
                     <td className="py-1 px-2">{i + 1}</td>
                     <td className={`py-1 px-2 text-right font-mono ${format.changeColor(s.total_return)}`}>{format.pct(s.total_return)}</td>
                     <td className="py-1 px-2 text-right font-mono">{s.sharpe_ratio.toFixed(2)}</td>
@@ -395,15 +395,15 @@ export default function BacktestsPage() {
             </div>
           ) : runs.length === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-surface-700">
-              <FlaskConical className="w-10 h-10 mb-2 text-surface-200" />
+              <FlaskConical className="w-10 h-10 mb-2 text-surface-400" />
               <p className="font-medium">No backtests yet</p>
-              <p className="text-sm text-surface-200 mt-1">Run a backtest from the API</p>
+              <p className="text-sm text-surface-400 mt-1">Run a backtest from the API</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-surface-200">
+                  <tr className="border-b border-surface-300">
                     <th className="text-left py-2 px-3 font-medium text-surface-700">Strategy</th>
                     <th className="text-left py-2 px-3 font-medium text-surface-700">Symbol</th>
                     <th className="text-left py-2 px-3 font-medium text-surface-700">Status</th>
@@ -419,8 +419,8 @@ export default function BacktestsPage() {
                     <tr
                       key={run.id}
                       onClick={() => setSelectedRun(run)}
-                      className={`border-b border-surface-100 cursor-pointer transition-colors ${
-                        selectedRun?.id === run.id ? "bg-primary-50" : "hover:bg-surface-50"
+                      className={`border-b border-surface-200 cursor-pointer transition-colors ${
+                        selectedRun?.id === run.id ? "bg-primary-50" : "hover:bg-surface-200"
                       }`}
                     >
                       <td className="py-2.5 px-3 font-medium text-surface-900">{run.strategy_name}</td>

@@ -106,9 +106,9 @@ export default function InstrumentWorkspacePage() {
   if (resolving) {
     return (
       <div>
-        <div className="h-16 animate-pulse bg-surface-100 rounded-lg mb-6" />
+        <div className="h-16 animate-pulse bg-surface-200 rounded-lg mb-6" />
         <div className="h-[400px] flex items-center justify-center text-surface-700">
-          <BarChart3 className="w-10 h-10 mb-2 text-surface-200 animate-pulse" />
+          <BarChart3 className="w-10 h-10 mb-2 text-surface-400 animate-pulse" />
           <p>Resolving {paramSymbol}...</p>
         </div>
       </div>
@@ -150,14 +150,14 @@ export default function InstrumentWorkspacePage() {
         >
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <span className="text-surface-200">/</span>
+        <span className="text-surface-400">/</span>
         <Link
           href="/instruments"
           className="text-sm text-surface-700 hover:text-surface-900"
         >
           Instruments
         </Link>
-        <span className="text-surface-200">/</span>
+        <span className="text-surface-400">/</span>
         <span className="text-sm font-medium text-surface-900">
           {instrument?.symbol ?? "..."}
         </span>
@@ -165,7 +165,7 @@ export default function InstrumentWorkspacePage() {
 
       {/* ── Instrument Header ── */}
       {loadingInstrument ? (
-        <div className="h-16 animate-pulse bg-surface-100 rounded-lg mb-6" />
+        <div className="h-16 animate-pulse bg-surface-200 rounded-lg mb-6" />
       ) : instrument ? (
         <Header
           title={`${instrument.symbol} — ${instrument.name}`}
@@ -239,7 +239,7 @@ export default function InstrumentWorkspacePage() {
               <div className="flex items-center gap-4">
                 <CardTitle>Price Chart</CardTitle>
                 {/* Timeframe selector */}
-                <div className="flex items-center gap-1 bg-surface-100 rounded-lg p-0.5">
+                <div className="flex items-center gap-1 bg-surface-200 rounded-lg p-0.5">
                   {TIMEFRAMES.map((tf) => (
                     <button
                       key={tf.value}
@@ -260,7 +260,7 @@ export default function InstrumentWorkspacePage() {
               <select
                 value={limit}
                 onChange={(e) => setLimit(Number(e.target.value))}
-                className="text-xs border border-surface-200 rounded-lg px-2 py-1"
+                className="text-xs border border-surface-300 rounded-lg px-2 py-1"
               >
                 <option value={100}>100 bars</option>
                 <option value={200}>200 bars</option>
@@ -272,7 +272,7 @@ export default function InstrumentWorkspacePage() {
             {loadingChart ? (
               <div className="h-[400px] flex items-center justify-center text-surface-700">
                 <div className="animate-pulse text-center">
-                  <BarChart3 className="w-10 h-10 mx-auto mb-2 text-surface-200" />
+                  <BarChart3 className="w-10 h-10 mx-auto mb-2 text-surface-400" />
                   <p>Loading chart data...</p>
                 </div>
               </div>
@@ -285,9 +285,9 @@ export default function InstrumentWorkspacePage() {
               />
             ) : (
               <div className="h-[400px] flex flex-col items-center justify-center text-surface-700">
-                <BarChart3 className="w-10 h-10 mb-2 text-surface-200" />
+                <BarChart3 className="w-10 h-10 mb-2 text-surface-400" />
                 <p>No bar data available</p>
-                <p className="text-sm text-surface-200 mt-1">
+                <p className="text-sm text-surface-400 mt-1">
                   Run the data ingestion pipeline to populate bars
                 </p>
               </div>
@@ -313,7 +313,7 @@ export default function InstrumentWorkspacePage() {
                     className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                       isActive
                         ? "bg-primary-50 text-primary-700 font-medium"
-                        : "text-surface-700 hover:bg-surface-50"
+                        : "text-surface-700 hover:bg-surface-200"
                     }`}
                   >
                     {preset.name}
@@ -345,13 +345,13 @@ export default function InstrumentWorkspacePage() {
               ].map((name) => (
                 <label
                   key={name}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-50 cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-200 cursor-pointer"
                 >
                   <input
                     type="checkbox"
                     checked={selectedIndicators.includes(name)}
                     onChange={() => toggleIndicator(name)}
-                    className="rounded border-surface-200 text-primary-600 focus:ring-primary-500"
+                    className="rounded border-surface-300 text-primary-600 focus:ring-primary-500"
                   />
                   <span className="text-sm text-surface-900 font-mono">
                     {name}
@@ -440,7 +440,7 @@ export default function InstrumentWorkspacePage() {
                         ? "bg-red-50 text-danger-600"
                         : debate.final_state === "REDUCE"
                         ? "bg-amber-50 text-warning-600"
-                        : "bg-surface-100 text-surface-700"
+                        : "bg-surface-200 text-surface-700"
                     }`}
                   >
                     {debate.final_state?.replace("_", " ")}
@@ -473,7 +473,7 @@ export default function InstrumentWorkspacePage() {
                 </div>
                 <p className="text-surface-500 text-xs">{debate.risk_reasoning}</p>
 
-                <div className="grid grid-cols-1 gap-2 pt-2 border-t border-surface-200">
+                <div className="grid grid-cols-1 gap-2 pt-2 border-t border-surface-300">
                   <div>
                     <p className="font-medium text-surface-900 mb-1">Entry</p>
                     <p className="text-surface-700">{debate.entry_zone}</p>
@@ -489,7 +489,7 @@ export default function InstrumentWorkspacePage() {
                 </div>
 
                 {debate.strategy_breakdown?.length > 0 && (
-                  <div className="pt-2 border-t border-surface-200">
+                  <div className="pt-2 border-t border-surface-300">
                     <p className="font-medium text-surface-900 mb-1.5">
                       Strategy breakdown ({debate.strategy_breakdown.length})
                     </p>
@@ -497,7 +497,7 @@ export default function InstrumentWorkspacePage() {
                       {debate.strategy_breakdown.map((s: any, idx: number) => (
                         <span
                           key={idx}
-                          className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700"
+                          className="text-xs px-2 py-1 rounded-lg bg-surface-200 text-surface-700"
                         >
                           {s.strategy}: {s.state}
                         </span>
@@ -506,7 +506,7 @@ export default function InstrumentWorkspacePage() {
                   </div>
                 )}
 
-                <p className="text-surface-400 text-xs pt-2 border-t border-surface-200">
+                <p className="text-surface-400 text-xs pt-2 border-t border-surface-300">
                   Synthesizes technical strategies, recent news, and congressional
                   trading activity. Does not yet include institutional 13F filings.
                   This is reasoning over available evidence, not a statistical forecast.

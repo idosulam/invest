@@ -15,16 +15,16 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
 
   const roleBadge = user?.role === "ADMIN"
-    ? { label: "Admin", color: "bg-red-500/10 text-danger-500" }
+    ? { label: "Admin", color: "bg-red-500/10 text-danger-400" }
     : user?.role === "ANALYST"
-    ? { label: "Analyst", color: "bg-blue-500/10 text-primary-400" }
-    : { label: "Viewer", color: "bg-surface-100 text-surface-500" };
+    ? { label: "Analyst", color: "bg-primary-500/10 text-primary-400" }
+    : { label: "Viewer", color: "bg-surface-200 text-surface-500" };
 
   return (
     <div className="flex items-center justify-between mb-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">{title}</h1>
-        {subtitle && <p className="text-sm text-surface-500 mt-0.5">{subtitle}</p>}
+        <h1 className="text-xl font-bold text-surface-800">{title}</h1>
+        {subtitle && <p className="text-[13px] text-surface-500 mt-0.5">{subtitle}</p>}
       </div>
 
       <div className="flex items-center gap-3">
@@ -34,14 +34,14 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-surface-100 transition-colors"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-surface-200 transition-colors"
           >
-            <div className="w-8 h-8 bg-primary-500/10 rounded-full flex items-center justify-center">
-              <User className="w-4 h-4 text-primary-400" />
+            <div className="w-7 h-7 bg-primary-500/10 rounded-full flex items-center justify-center">
+              <User className="w-3.5 h-3.5 text-primary-400" />
             </div>
             <div className="text-left hidden md:block">
-              <p className="text-sm font-medium text-white">{user?.username}</p>
-              <span className={`inline-flex items-center px-1.5 py-0 text-[10px] font-medium rounded-full ${roleBadge.color}`}>
+              <p className="text-[13px] font-medium text-surface-700">{user?.username}</p>
+              <span className={`inline-flex items-center px-1.5 py-0 text-[10px] font-medium rounded ${roleBadge.color}`}>
                 {roleBadge.label}
               </span>
             </div>
@@ -52,24 +52,24 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
           {showMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 top-full mt-1 w-56 bg-surface-800 rounded-lg shadow-lg border border-surface-200 py-1 z-50">
-                <div className="px-3 py-2 border-b border-surface-200">
-                  <p className="text-sm font-medium text-white">{user?.username}</p>
-                  <p className="text-xs text-surface-500">{user?.email}</p>
+              <div className="absolute right-0 top-full mt-1 w-56 bg-surface-100 rounded-lg shadow-xl border border-surface-300 py-1 z-50">
+                <div className="px-3 py-2.5 border-b border-surface-300">
+                  <p className="text-[13px] font-medium text-surface-700">{user?.username}</p>
+                  <p className="text-[11px] text-surface-400 mt-0.5">{user?.email}</p>
                 </div>
 
-                <div className="px-3 py-2 border-b border-surface-200">
-                  <div className="flex items-center gap-2 text-xs text-surface-500">
-                    <Shield className="w-3.5 h-3.5" />
+                <div className="px-3 py-2 border-b border-surface-300">
+                  <div className="flex items-center gap-2 text-[11px] text-surface-400">
+                    <Shield className="w-3 h-3" />
                     <span>Role: {user?.role}</span>
                   </div>
                 </div>
 
                 <button
                   onClick={() => { setShowMenu(false); logout(); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger-500 hover:bg-surface-100 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-danger-400 hover:bg-surface-200 transition-colors"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                   Sign Out
                 </button>
               </div>

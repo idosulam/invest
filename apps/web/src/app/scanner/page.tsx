@@ -173,7 +173,7 @@ export default function ScannerPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowFilters((s) => !s)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-surface-200 rounded-lg hover:bg-surface-50"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-surface-300 rounded-lg hover:bg-surface-200"
             >
               <Filter className="w-4 h-4" />
               Filters
@@ -223,7 +223,7 @@ export default function ScannerPage() {
                         instrument_type: e.target.value,
                       }))
                     }
-                    className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                   >
                     <option value="">All</option>
                     <option value="STOCK">Stock</option>
@@ -242,7 +242,7 @@ export default function ScannerPage() {
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, min_rsi: e.target.value }))
                       }
-                      className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                      className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                     />
                     <input
                       type="number"
@@ -251,7 +251,7 @@ export default function ScannerPage() {
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, max_rsi: e.target.value }))
                       }
-                      className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                      className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                     />
                   </div>
                 </FilterGroup>
@@ -268,7 +268,7 @@ export default function ScannerPage() {
                           above_sma_200: e.target.checked ? "true" : "",
                         }))
                       }
-                      className="rounded border-surface-200"
+                      className="rounded border-surface-300"
                     />
                     Price above SMA 200
                   </label>
@@ -282,7 +282,7 @@ export default function ScannerPage() {
                           sma_20_above_50: e.target.checked ? "true" : "",
                         }))
                       }
-                      className="rounded border-surface-200"
+                      className="rounded border-surface-300"
                     />
                     SMA 20 above SMA 50
                   </label>
@@ -297,7 +297,7 @@ export default function ScannerPage() {
                     onChange={(e) =>
                       setFilters((f) => ({ ...f, min_adx: e.target.value }))
                     }
-                    className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                   />
                 </FilterGroup>
 
@@ -313,7 +313,7 @@ export default function ScannerPage() {
                           bb_oversold: e.target.checked,
                         }))
                       }
-                      className="rounded border-surface-200"
+                      className="rounded border-surface-300"
                     />
                     Oversold (%B &lt; 0.2)
                   </label>
@@ -327,7 +327,7 @@ export default function ScannerPage() {
                           bb_overbought: e.target.checked,
                         }))
                       }
-                      className="rounded border-surface-200"
+                      className="rounded border-surface-300"
                     />
                     Overbought (%B &gt; 0.8)
                   </label>
@@ -345,7 +345,7 @@ export default function ScannerPage() {
                         min_volume_avg: e.target.value,
                       }))
                     }
-                    className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                   />
                 </FilterGroup>
 
@@ -359,7 +359,7 @@ export default function ScannerPage() {
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, min_pe: e.target.value }))
                       }
-                      className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                      className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                     />
                     <input
                       type="number"
@@ -368,7 +368,7 @@ export default function ScannerPage() {
                       onChange={(e) =>
                         setFilters((f) => ({ ...f, max_pe: e.target.value }))
                       }
-                      className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                      className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                     />
                   </div>
                 </FilterGroup>
@@ -385,7 +385,7 @@ export default function ScannerPage() {
                         min_market_cap: e.target.value,
                       }))
                     }
-                    className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                   />
                 </FilterGroup>
 
@@ -398,7 +398,7 @@ export default function ScannerPage() {
                     onChange={(e) =>
                       setFilters((f) => ({ ...f, sector: e.target.value }))
                     }
-                    className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2"
                   />
                 </FilterGroup>
               </div>
@@ -410,7 +410,7 @@ export default function ScannerPage() {
         <div className={showFilters ? "lg:col-span-3" : "lg:col-span-4"}>
           <Card padding="sm">
             {/* Results header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-surface-200">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-surface-300">
               <div className="flex items-center gap-3">
                 <p className="text-sm font-medium text-surface-900">
                   {hasScanned
@@ -418,14 +418,14 @@ export default function ScannerPage() {
                     : "Run a scan to see results"}
                 </p>
                 {scanTime > 0 && (
-                  <span className="text-xs text-surface-200">{scanTime}ms</span>
+                  <span className="text-xs text-surface-400">{scanTime}ms</span>
                 )}
               </div>
             </div>
 
             {!hasScanned ? (
               <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-                <ScanLine className="w-10 h-10 mb-2 text-surface-200" />
+                <ScanLine className="w-10 h-10 mb-2 text-surface-400" />
                 <p>Configure filters and click Run Scan</p>
               </div>
             ) : loading ? (
@@ -434,14 +434,14 @@ export default function ScannerPage() {
               </div>
             ) : results.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-                <ScanLine className="w-10 h-10 mb-2 text-surface-200" />
+                <ScanLine className="w-10 h-10 mb-2 text-surface-400" />
                 <p>No instruments match your filters</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-surface-200">
+                    <tr className="border-b border-surface-300">
                       <SortHeader
                         field="symbol"
                         label="Symbol"
@@ -511,7 +511,7 @@ export default function ScannerPage() {
                     {results.map((r) => (
                       <tr
                         key={r.instrument_id}
-                        className="border-b border-surface-100 hover:bg-surface-50"
+                        className="border-b border-surface-200 hover:bg-surface-200"
                       >
                         <td className="py-2 px-2">
                           <Link

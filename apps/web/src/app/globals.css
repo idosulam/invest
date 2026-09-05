@@ -1,41 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Market Platform — Dark financial UI
+ * Design: data-dense, high-contrast, utilitarian.
+ * Typography: Inter for clarity at small sizes. One family, deliberate scale.
+ */
+
 :root {
-  --foreground-rgb: 248, 250, 252;
-  --background-rgb: 8, 12, 21;
-  --card-rgb: 17, 24, 39;
-  --card-border-rgb: 55, 65, 81;
+  --background: #020617;
+  --surface-card: #0f172a;
+  --surface-elevated: #1e293b;
+  --border: #1e293b;
+  --border-strong: #334155;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+}
+
+/* ── Base ───────────────────────────────────────────────── */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
-  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--background);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
+/* ── Scrollbar ──────────────────────────────────────────── */
 
-
-/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #64748b; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-/* Chart tooltip */
-.recharts-tooltip-wrapper { outline: none !important; }
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
 
-/* Dark form inputs */
+/* ── Typography ─────────────────────────────────────────── */
+
+/* Tighten headings for data-dense UI */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+/* Monospace for numeric data */
+.font-mono, code, pre {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Form inputs ────────────────────────────────────────── */
+
 input, select, textarea {
-  background-color: rgb(30, 41, 59);
-  color: rgb(241, 245, 249);
-  border-color: rgb(51, 65, 85);
+  background-color: #0f172a;
+  color: var(--text-primary);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.15s ease;
 }
 input::placeholder, textarea::placeholder {
-  color: rgb(100, 116, 139);
+  color: #475569;
 }
 input:focus, select:focus, textarea:focus {
-  border-color: rgb(59, 130, 246);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+/* ── Selection ──────────────────────────────────────────── */
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #f1f5f9;
+}
+
+/* ── Chart tooltip ──────────────────────────────────────── */
+
+.recharts-tooltip-wrapper { outline: none !important; }
+
+/* ── Focus ring — accessible, visible ───────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Reduced motion ─────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

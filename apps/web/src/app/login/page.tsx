@@ -16,7 +16,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (!authLoading && token) {
       router.push("/");
@@ -45,45 +44,45 @@ export default function LoginPage() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-surface-300 border-t-primary-500 rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (token) return null; // Will redirect
+  if (token) return null;
 
   return (
     <div className="min-h-screen bg-surface-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl font-bold text-white">MP</span>
+          <div className="w-12 h-12 bg-primary-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span className="text-xl font-bold text-white">MP</span>
           </div>
-          <h1 className="text-2xl font-bold text-surface-900">Market Platform</h1>
-          <p className="text-sm text-surface-700 mt-1">Stock & ETF Research Platform</p>
+          <h1 className="text-xl font-bold text-surface-800">Market Platform</h1>
+          <p className="text-[13px] text-surface-500 mt-1">Stock & ETF research</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-surface-200 p-6">
+        <div className="bg-surface-100 rounded-lg border border-surface-300 p-6">
           {/* Tabs */}
-          <div className="flex mb-6 bg-surface-100 rounded-lg p-1">
+          <div className="flex mb-5 bg-surface-200 rounded-md p-0.5">
             <button
               onClick={() => { setMode("login"); setError(""); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-1.5 text-[13px] font-medium rounded transition-colors ${
                 mode === "login"
-                  ? "bg-white text-surface-900 shadow-sm"
-                  : "text-surface-700 hover:text-surface-900"
+                  ? "bg-surface-100 text-surface-800 shadow-sm"
+                  : "text-surface-400 hover:text-surface-600"
               }`}
             >
               Sign In
             </button>
             <button
               onClick={() => { setMode("register"); setError(""); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-1.5 text-[13px] font-medium rounded transition-colors ${
                 mode === "register"
-                  ? "bg-white text-surface-900 shadow-sm"
-                  : "text-surface-700 hover:text-surface-900"
+                  ? "bg-surface-100 text-surface-800 shadow-sm"
+                  : "text-surface-400 hover:text-surface-600"
               }`}
             >
               Create Account
@@ -92,42 +91,42 @@ export default function LoginPage() {
 
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-danger-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-danger-600">{error}</p>
+            <div className="flex items-start gap-2 p-3 mb-4 bg-danger-50 border border-danger-600/20 rounded-md">
+              <AlertTriangle className="w-4 h-4 text-danger-400 flex-shrink-0 mt-0.5" />
+              <p className="text-[13px] text-danger-400">{error}</p>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
             {mode === "register" && (
               <div>
-                <label className="block text-sm font-medium text-surface-900 mb-1">Email</label>
+                <label className="block text-[13px] font-medium text-surface-600 mb-1">Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full"
                   placeholder="you@example.com"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-surface-900 mb-1">Username</label>
+              <label className="block text-[13px] font-medium text-surface-600 mb-1">Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full"
                 placeholder="your_username"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-surface-900 mb-1">Password</label>
+              <label className="block text-[13px] font-medium text-surface-600 mb-1">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -135,13 +134,13 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full pr-10"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-700 hover:text-surface-900"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -151,7 +150,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-[13px] font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-5"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -164,17 +163,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo hint */}
-          <div className="mt-4 p-3 bg-surface-50 rounded-lg">
-            <p className="text-xs text-surface-700">
-              <span className="font-medium">First time?</span> Create an account to get started.
+          {/* Hint */}
+          <div className="mt-4 p-3 bg-surface-200/50 rounded-md">
+            <p className="text-[12px] text-surface-400 leading-relaxed">
+              <span className="font-medium text-surface-500">First time?</span> Create an account to get started.
               Admin users can manage data sources and system settings.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-surface-200 mt-6">
+        <p className="text-center text-[11px] text-surface-400 mt-6">
           Research & paper trading only. Not financial advice.
         </p>
       </div>

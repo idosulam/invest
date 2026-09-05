@@ -151,7 +151,7 @@ export default function DiscoverPage() {
               className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                 screener === s.value
                   ? "bg-primary-600 text-white"
-                  : "bg-surface-100 text-surface-700 hover:bg-surface-200"
+                  : "bg-surface-200 text-surface-700 hover:bg-surface-200"
               }`}
             >
               {s.label}
@@ -174,7 +174,7 @@ export default function DiscoverPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-surface-200 text-left">
+                <tr className="border-b border-surface-300 text-left">
                   <th className="py-2 px-3 text-surface-700 font-medium">Symbol</th>
                   <th className="py-2 px-3 text-surface-700 font-medium">Name</th>
                   <th className="py-2 px-3 text-surface-700 font-medium text-right">Price</th>
@@ -191,7 +191,7 @@ export default function DiscoverPage() {
                   return (
                     <tr
                       key={r.symbol}
-                      className="border-b border-surface-100 hover:bg-surface-50 cursor-pointer"
+                      className="border-b border-surface-200 hover:bg-surface-200 cursor-pointer"
                       onClick={() => handleOpenChart(r)}
                     >
                       <td className="py-2.5 px-3 font-semibold text-primary-600">
@@ -302,7 +302,7 @@ export default function DiscoverPage() {
                   ? "bg-red-50 text-danger-600"
                   : analysisResult.final_state === "REDUCE"
                   ? "bg-amber-50 text-warning-600"
-                  : "bg-surface-100 text-surface-700"
+                  : "bg-surface-200 text-surface-700"
               }`}
             >
               {analysisResult.final_state === "ENTER_LONG" ? "BUY" :
@@ -352,13 +352,13 @@ export default function DiscoverPage() {
           </div>
 
           {analysisResult.strategy_breakdown?.length > 0 && (
-            <details className="pt-3 border-t border-surface-200">
+            <details className="pt-3 border-t border-surface-300">
               <summary className="text-xs font-medium text-surface-900 cursor-pointer">
                 Strategy breakdown ({analysisResult.strategy_breakdown.length})
               </summary>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {analysisResult.strategy_breakdown.map((s: any, i: number) => (
-                  <span key={i} className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700">
+                  <span key={i} className="text-xs px-2 py-1 rounded-lg bg-surface-200 text-surface-700">
                     {s.strategy}: {s.state}
                     {s.win_rate != null && <span className="ml-1 text-surface-500">({s.win_rate.toFixed(0)}% WR)</span>}
                   </span>

@@ -122,18 +122,18 @@ export default function AlertsPage() {
               placeholder="Alert name..."
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               autoFocus
             />
             <textarea
               placeholder='Conditions JSON, e.g. {"type": "rsi_below", "threshold": 30}'
               value={newCondition}
               onChange={(e) => setNewCondition(e.target.value)}
-              className="w-full text-sm font-mono border border-surface-200 rounded-lg px-3 py-2 h-20 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full text-sm font-mono border border-surface-300 rounded-lg px-3 py-2 h-20 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             <div className="flex gap-2">
               <button onClick={createRule} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700">Create</button>
-              <button onClick={() => { setShowCreate(false); setNewName(""); }} className="px-4 py-2 text-sm border border-surface-200 rounded-lg hover:bg-surface-50">Cancel</button>
+              <button onClick={() => { setShowCreate(false); setNewName(""); }} className="px-4 py-2 text-sm border border-surface-300 rounded-lg hover:bg-surface-200">Cancel</button>
             </div>
           </div>
         </Card>
@@ -151,7 +151,7 @@ export default function AlertsPage() {
         </Card>
         <Card padding="sm">
           <p className="text-xs text-surface-700 mb-1">Disabled</p>
-          <p className="text-2xl font-bold text-surface-200">{rules.filter((r) => !r.enabled).length}</p>
+          <p className="text-2xl font-bold text-surface-400">{rules.filter((r) => !r.enabled).length}</p>
         </Card>
       </div>
 
@@ -163,39 +163,39 @@ export default function AlertsPage() {
           <div className="h-48 flex items-center justify-center text-surface-700"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading...</div>
         ) : rules.length === 0 ? (
           <div className="h-48 flex flex-col items-center justify-center text-surface-700">
-            <Bell className="w-10 h-10 mb-2 text-surface-200" />
+            <Bell className="w-10 h-10 mb-2 text-surface-400" />
             <p className="font-medium">No alert rules yet</p>
-            <p className="text-sm text-surface-200 mt-1">Create one to get notified</p>
+            <p className="text-sm text-surface-400 mt-1">Create one to get notified</p>
           </div>
         ) : (
           <div className="space-y-3">
             {rules.map((rule) => (
-              <div key={rule.id} className={`p-4 rounded-lg border transition-colors ${rule.enabled ? "bg-white border-surface-200" : "bg-surface-50 border-surface-100 opacity-60"}`}>
+              <div key={rule.id} className={`p-4 rounded-lg border transition-colors ${rule.enabled ? "bg-white border-surface-300" : "bg-surface-200 border-surface-200 opacity-60"}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium text-surface-900">{rule.name}</h4>
-                      {!rule.enabled && <span className="px-2 py-0.5 text-xs bg-surface-100 text-surface-700 rounded-full">Disabled</span>}
+                      {!rule.enabled && <span className="px-2 py-0.5 text-xs bg-surface-200 text-surface-700 rounded-full">Disabled</span>}
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-sm">
-                      <code className="font-mono text-xs text-surface-900 bg-surface-100 px-2 py-1 rounded">{JSON.stringify(rule.conditions)}</code>
+                      <code className="font-mono text-xs text-surface-900 bg-surface-200 px-2 py-1 rounded">{JSON.stringify(rule.conditions)}</code>
                     </div>
                     <div className="flex items-center gap-3 mt-2">
                       <div className="flex items-center gap-1.5">
                         {rule.channels.map((ch) => {
                           const Icon = CHANNEL_ICONS[ch] || Bell;
-                          return <span key={ch} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-surface-100 text-surface-700 rounded-full"><Icon className="w-3 h-3" />{ch}</span>;
+                          return <span key={ch} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-surface-200 text-surface-700 rounded-full"><Icon className="w-3 h-3" />{ch}</span>;
                         })}
                       </div>
-                      <span className="flex items-center gap-1 text-xs text-surface-200"><Clock className="w-3 h-3" />{rule.cooldown_minutes}m cooldown</span>
-                      {rule.last_fired_at && <span className="text-xs text-surface-200">Last: {new Date(rule.last_fired_at).toLocaleDateString()}</span>}
+                      <span className="flex items-center gap-1 text-xs text-surface-400"><Clock className="w-3 h-3" />{rule.cooldown_minutes}m cooldown</span>
+                      {rule.last_fired_at && <span className="text-xs text-surface-400">Last: {new Date(rule.last_fired_at).toLocaleDateString()}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4">
                     <button onClick={() => toggleRule(rule.id, rule.enabled)}>
-                      {rule.enabled ? <ToggleRight className="w-8 h-8 text-primary-600" /> : <ToggleLeft className="w-8 h-8 text-surface-200" />}
+                      {rule.enabled ? <ToggleRight className="w-8 h-8 text-primary-600" /> : <ToggleLeft className="w-8 h-8 text-surface-400" />}
                     </button>
-                    <button onClick={() => deleteRule(rule.id)} className="p-1.5 text-surface-200 hover:text-danger-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => deleteRule(rule.id)} className="p-1.5 text-surface-400 hover:text-danger-500 rounded"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>

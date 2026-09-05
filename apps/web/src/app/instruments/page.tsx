@@ -9,7 +9,9 @@ import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { useInstruments } from "@/hooks/useApi";
 import type { Instrument } from "@/types";
 import { instruments as instrumentsApi } from "@/lib/api";
+
 const TYPES = ["", "STOCK", "ETF", "BENCHMARK", "INDEX"];
+
 export default function InstrumentsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -81,16 +83,16 @@ export default function InstrumentsPage() {
                 }
               }}
               disabled={refreshing}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-700 bg-surface-100 rounded-lg hover:bg-surface-200 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-surface-600 bg-surface-200 rounded-lg hover:bg-surface-300 disabled:opacity-50 transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {refreshing ? "Refreshing..." : "Refresh Data"}
             </button>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Add Instrument
             </button>
           </div>
@@ -99,7 +101,7 @@ export default function InstrumentsPage() {
 
       {/* Message */}
       {message && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-success-600">
+        <div className="mb-4 p-3 bg-success-50 border border-success-600/20 rounded-md text-[13px] text-success-400">
           {message}
         </div>
       )}
@@ -109,37 +111,31 @@ export default function InstrumentsPage() {
         <Card className="mb-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
-              <label className="block text-xs font-medium text-surface-700 mb-1">
-                Symbol
-              </label>
+              <label className="block text-[12px] font-medium text-surface-500 mb-1">Symbol</label>
               <input
                 type="text"
                 value={addSymbol}
                 onChange={(e) => setAddSymbol(e.target.value.toUpperCase())}
                 placeholder="AAPL"
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-surface-700 mb-1">
-                Name
-              </label>
+              <label className="block text-[12px] font-medium text-surface-500 mb-1">Name</label>
               <input
                 type="text"
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
                 placeholder="Apple Inc."
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-surface-700 mb-1">
-                Type
-              </label>
+              <label className="block text-[12px] font-medium text-surface-500 mb-1">Type</label>
               <select
                 value={addType}
                 onChange={(e) => setAddType(e.target.value)}
-                className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2"
+                className="w-full"
               >
                 <option value="STOCK">Stock</option>
                 <option value="ETF">ETF</option>
@@ -178,7 +174,7 @@ export default function InstrumentsPage() {
                   }
                 }}
                 disabled={adding || !addSymbol || !addName}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                className="px-4 py-2 text-[13px] font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
               >
                 {adding ? "Adding..." : "Add"}
               </button>
@@ -186,7 +182,7 @@ export default function InstrumentsPage() {
             <div className="flex items-end">
               <button
                 onClick={() => setShowAddForm(false)}
-                className="px-4 py-2 text-sm text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50"
+                className="px-4 py-2 text-[13px] text-surface-500 border border-surface-300 rounded-lg hover:bg-surface-200 transition-colors"
               >
                 Cancel
               </button>
@@ -199,7 +195,7 @@ export default function InstrumentsPage() {
       <Card className="mb-6" padding="sm">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-200" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
             <input
               type="text"
               placeholder="Search by symbol or name..."
@@ -208,19 +204,19 @@ export default function InstrumentsPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full pl-10 pr-4 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-surface-200" />
+            <Filter className="w-4 h-4 text-surface-400" />
             <select
               value={typeFilter}
               onChange={(e) => {
                 setTypeFilter(e.target.value);
                 setPage(1);
               }}
-              className="text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-3 py-2"
             >
               <option value="">All Types</option>
               <option value="STOCK">Stock</option>
@@ -235,88 +231,64 @@ export default function InstrumentsPage() {
       {/* ── Table ── */}
       <Card padding="sm">
         {isLoading ? (
-          <div className="h-64 flex items-center justify-center text-surface-700">
+          <div className="h-64 flex items-center justify-center text-surface-400 text-[13px]">
             Loading...
           </div>
         ) : instruments.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-            <Search className="w-10 h-10 mb-2 text-surface-200" />
-            <p>No instruments found</p>
+          <div className="h-64 flex flex-col items-center justify-center text-surface-400">
+            <Search className="w-8 h-8 mb-2 text-surface-300" />
+            <p className="text-[13px] font-medium text-surface-500">No instruments found</p>
             {search && (
-              <p className="text-sm text-surface-200 mt-1">
-                Try a different search term
-              </p>
+              <p className="text-[12px] text-surface-400 mt-1">Try a different search term</p>
             )}
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-surface-200">
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Symbol
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Name
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Type
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Exchange
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Sector
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Currency
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-surface-700">
-                      Status
-                    </th>
-                    <th className="text-right py-2 px-3 font-medium text-surface-700"></th>
+                  <tr className="border-b border-surface-300">
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Symbol</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Name</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Type</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Exchange</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Sector</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Currency</th>
+                    <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Status</th>
+                    <th className="text-right py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {instruments.map((inst) => (
                     <tr
                       key={inst.id}
-                      className="border-b border-surface-100 hover:bg-surface-50 transition-colors"
+                      className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors"
                     >
                       <td className="py-2.5 px-3">
                         <Link
                           href={`/instruments/view?id=${inst.id}`}
-                          className="font-semibold text-primary-600 hover:text-primary-700"
+                          className="font-semibold text-primary-400 hover:text-primary-300"
                         >
                           {inst.symbol}
                         </Link>
                       </td>
-                      <td className="py-2.5 px-3 text-surface-900 max-w-[200px] truncate">
-                        {inst.name}
-                      </td>
+                      <td className="py-2.5 px-3 text-surface-600 max-w-[200px] truncate">{inst.name}</td>
                       <td className="py-2.5 px-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-100 text-surface-700">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-200 text-surface-500">
                           {inst.type}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-surface-700">
-                        {inst.exchange ?? "—"}
-                      </td>
-                      <td className="py-2.5 px-3 text-surface-700 max-w-[150px] truncate">
-                        {inst.sector ?? "—"}
-                      </td>
-                      <td className="py-2.5 px-3 text-surface-700">
-                        {inst.currency}
-                      </td>
+                      <td className="py-2.5 px-3 text-surface-400 font-mono text-[12px]">{inst.exchange ?? "—"}</td>
+                      <td className="py-2.5 px-3 text-surface-400 max-w-[150px] truncate">{inst.sector ?? "—"}</td>
+                      <td className="py-2.5 px-3 text-surface-400 font-mono text-[12px]">{inst.currency}</td>
                       <td className="py-2.5 px-3">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
                             inst.status === "ACTIVE"
-                              ? "bg-green-50 text-success-600"
+                              ? "bg-success-50 text-success-400"
                               : inst.status === "DELISTED"
-                                ? "bg-red-50 text-danger-600"
-                                : "bg-amber-50 text-warning-600"
+                              ? "bg-danger-50 text-danger-400"
+                              : "bg-warning-50 text-warning-400"
                           }`}
                         >
                           {inst.status}
@@ -325,13 +297,13 @@ export default function InstrumentsPage() {
                       <td className="py-2.5 px-3 text-right space-x-3">
                         <Link
                           href={`/instruments/view?id=${inst.id}`}
-                          className="text-primary-600 hover:text-primary-700 text-xs font-medium"
+                          className="text-primary-400 hover:text-primary-300 text-[12px] font-medium"
                         >
                           Open →
                         </Link>
                         <button
                           onClick={() => setDeleteTarget({ id: inst.id, symbol: inst.symbol })}
-                          className="text-danger-500 hover:text-danger-600 text-xs font-medium"
+                          className="text-danger-400 hover:text-danger-500 text-[12px] font-medium"
                         >
                           Delete
                         </button>
@@ -344,22 +316,22 @@ export default function InstrumentsPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-surface-200">
-                <p className="text-sm text-surface-700">
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-surface-300">
+                <p className="text-[13px] text-surface-400">
                   Page {page} of {totalPages} · {total} total
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="px-3 py-1.5 text-sm border border-surface-200 rounded-lg hover:bg-surface-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-[13px] border border-surface-300 rounded-lg hover:bg-surface-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="px-3 py-1.5 text-sm border border-surface-200 rounded-lg hover:bg-surface-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-[13px] border border-surface-300 rounded-lg hover:bg-surface-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
                   </button>

@@ -150,7 +150,7 @@ export default function OperationsPage() {
         actions={
           <button
             onClick={fetchData}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-surface-200 rounded-lg hover:bg-surface-50"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-surface-300 rounded-lg hover:bg-surface-200"
           >
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
@@ -192,7 +192,7 @@ export default function OperationsPage() {
                     value={killReason}
                     onChange={(e) => setKillReason(e.target.value)}
                     placeholder="Reason for activation"
-                    className="text-sm border border-surface-200 rounded-lg px-3 py-2 w-64"
+                    className="text-sm border border-surface-300 rounded-lg px-3 py-2 w-64"
                   />
                 )}
                 <button
@@ -214,7 +214,7 @@ export default function OperationsPage() {
             <Card padding="sm">
               <p className="text-xs text-surface-700 mb-1">Instruments</p>
               <p className="text-2xl font-bold text-surface-900">{status?.active_instruments ?? 0}</p>
-              <p className="text-xs text-surface-200">{status?.total_instruments ?? 0} total</p>
+              <p className="text-xs text-surface-400">{status?.total_instruments ?? 0} total</p>
             </Card>
             <Card padding="sm">
               <p className="text-xs text-surface-700 mb-1">Bars</p>
@@ -253,7 +253,7 @@ export default function OperationsPage() {
                   value={ingestSymbols}
                   onChange={(e) => setIngestSymbols(e.target.value)}
                   placeholder="AAPL,MSFT,GOOGL"
-                  className="flex-1 text-sm border border-surface-200 rounded-lg px-3 py-2"
+                  className="flex-1 text-sm border border-surface-300 rounded-lg px-3 py-2"
                 />
                 <button
                   onClick={triggerIngest}
@@ -272,12 +272,12 @@ export default function OperationsPage() {
               ) : (
                 <div className="space-y-2">
                   {jobs.map((job) => (
-                    <div key={job.id} className="flex items-center justify-between p-3 bg-surface-50 rounded-lg">
+                    <div key={job.id} className="flex items-center justify-between p-3 bg-surface-200 rounded-lg">
                       <div className="flex items-center gap-3">
                         <StatusIcon s={job.status} />
                         <div>
                           <p className="text-sm font-medium text-surface-900">{job.job_name}</p>
-                          <p className="text-xs text-surface-200">
+                          <p className="text-xs text-surface-400">
                             {new Date(job.started_at).toLocaleString()}
                             {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
                           </p>
@@ -286,7 +286,7 @@ export default function OperationsPage() {
                       <div className="text-right">
                         <span className={`text-xs font-medium ${statusColor(job.status)}`}>{job.status}</span>
                         {job.row_counts && (
-                          <p className="text-xs text-surface-200">
+                          <p className="text-xs text-surface-400">
                             {job.row_counts.inserted ?? 0} ins · {job.row_counts.updated ?? 0} upd · {job.row_counts.rejected ?? 0} rej
                           </p>
                         )}
@@ -311,17 +311,17 @@ export default function OperationsPage() {
               ) : (
                 <div className="space-y-2">
                   {issues.map((issue) => (
-                    <div key={issue.id} className="p-3 bg-surface-50 rounded-lg">
+                    <div key={issue.id} className="p-3 bg-surface-200 rounded-lg">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`px-1.5 py-0.5 text-xs rounded-full ${
                           issue.severity === "CRITICAL" ? "bg-red-50 text-danger-600"
                             : issue.severity === "HIGH" ? "bg-amber-50 text-warning-600"
-                            : "bg-surface-100 text-surface-700"
+                            : "bg-surface-200 text-surface-700"
                         }`}>{issue.severity}</span>
-                        <span className="text-xs text-surface-200">{issue.issue_type}</span>
+                        <span className="text-xs text-surface-400">{issue.issue_type}</span>
                       </div>
                       <p className="text-sm text-surface-900">{issue.description}</p>
-                      <p className="text-xs text-surface-200 mt-1">{new Date(issue.created_at).toLocaleString()}</p>
+                      <p className="text-xs text-surface-400 mt-1">{new Date(issue.created_at).toLocaleString()}</p>
                     </div>
                   ))}
                 </div>

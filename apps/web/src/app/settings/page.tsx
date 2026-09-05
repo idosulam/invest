@@ -41,7 +41,7 @@ export default function SettingsPage() {
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   activeSection === s.id
                     ? "bg-primary-50 text-primary-700"
-                    : "text-surface-700 hover:bg-surface-50"
+                    : "text-surface-700 hover:bg-surface-200"
                 }`}
               >
                 <s.icon className="w-4 h-4" />
@@ -78,12 +78,12 @@ function GeneralSettings() {
           <input
             type="text"
             defaultValue="Market Platform"
-            className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-surface-900 mb-1">Default Currency</label>
-          <select className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2">
+          <select className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2">
             <option>USD</option>
             <option>EUR</option>
             <option>GBP</option>
@@ -92,7 +92,7 @@ function GeneralSettings() {
         </div>
         <div>
           <label className="block text-sm font-medium text-surface-900 mb-1">Timezone</label>
-          <select className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2">
+          <select className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2">
             <option>America/New_York</option>
             <option>America/Chicago</option>
             <option>Europe/London</option>
@@ -124,7 +124,7 @@ function DataSourcesSettings() {
       </CardHeader>
       <div className="space-y-3">
         {sources.map((src) => (
-          <div key={src.name} className="flex items-center justify-between p-3 bg-surface-50 rounded-lg">
+          <div key={src.name} className="flex items-center justify-between p-3 bg-surface-200 rounded-lg">
             <div className="flex items-center gap-3">
               {src.status === "ok" ? (
                 <CheckCircle className="w-5 h-5 text-success-500" />
@@ -158,7 +158,7 @@ function AuthSettings() {
         <CardTitle>Authentication</CardTitle>
       </CardHeader>
       <div className="space-y-4">
-        <div className="p-3 bg-surface-50 rounded-lg">
+        <div className="p-3 bg-surface-200 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Shield className="w-4 h-4 text-surface-700" />
             <p className="font-medium text-surface-900">Password Policy</p>
@@ -174,7 +174,7 @@ function AuthSettings() {
           <input
             type="number"
             defaultValue={60}
-            className="w-48 text-sm border border-surface-200 rounded-lg px-3 py-2"
+            className="w-48 text-sm border border-surface-300 rounded-lg px-3 py-2"
           />
         </div>
       </div>
@@ -191,14 +191,14 @@ function NotificationSettings() {
         <CardTitle>Notification Channels</CardTitle>
       </CardHeader>
       <div className="space-y-4">
-        <div className="p-3 bg-surface-50 rounded-lg">
+        <div className="p-3 bg-surface-200 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Bell className="w-4 h-4 text-surface-700" />
             <p className="font-medium text-surface-900">In-App Notifications</p>
           </div>
           <p className="text-sm text-surface-700 ml-6">Enabled — shows in the alerts panel</p>
         </div>
-        <div className="p-3 bg-surface-50 rounded-lg">
+        <div className="p-3 bg-surface-200 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Key className="w-4 h-4 text-surface-700" />
             <p className="font-medium text-surface-900">Webhook</p>
@@ -206,7 +206,7 @@ function NotificationSettings() {
           <input
             type="text"
             placeholder="https://your-webhook-url.com/alerts"
-            className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 mt-1"
+            className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 mt-1"
           />
         </div>
       </div>
@@ -231,7 +231,7 @@ function SystemSettings() {
           { name: "Prefect Workers", status: "Running", ok: true },
           { name: "Local LLM", status: "Not configured", ok: false },
         ].map((svc) => (
-          <div key={svc.name} className="flex items-center justify-between p-3 bg-surface-50 rounded-lg">
+          <div key={svc.name} className="flex items-center justify-between p-3 bg-surface-200 rounded-lg">
             <div className="flex items-center gap-3">
               {svc.ok ? (
                 <CheckCircle className="w-5 h-5 text-success-500" />

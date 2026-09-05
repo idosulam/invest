@@ -78,9 +78,9 @@ export default function WatchlistsPage() {
         actions={
           <button
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
           >
-            <Plus className="w-4 h-4" /> New Watchlist
+            <Plus className="w-3.5 h-3.5" /> New Watchlist
           </button>
         }
       />
@@ -95,21 +95,18 @@ export default function WatchlistsPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && createWatchlist()}
-              className="flex-1 text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="flex-1"
               autoFocus
             />
             <button
               onClick={createWatchlist}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+              className="px-4 py-2 text-[13px] font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
             >
               Create
             </button>
             <button
-              onClick={() => {
-                setCreating(false);
-                setNewName("");
-              }}
-              className="p-2 text-surface-700 hover:text-surface-900"
+              onClick={() => { setCreating(false); setNewName(""); }}
+              className="p-2 text-surface-400 hover:text-surface-600"
             >
               <X className="w-4 h-4" />
             </button>
@@ -125,13 +122,11 @@ export default function WatchlistsPage() {
           </CardHeader>
 
           {isLoading ? (
-            <div className="h-48 flex items-center justify-center text-surface-700">
-              Loading...
-            </div>
+            <div className="h-48 flex items-center justify-center text-surface-400 text-[13px]">Loading...</div>
           ) : watchlists.length === 0 ? (
-            <div className="h-48 flex flex-col items-center justify-center text-surface-700">
-              <ListOrdered className="w-10 h-10 mb-2 text-surface-200" />
-              <p>No watchlists yet</p>
+            <div className="h-48 flex flex-col items-center justify-center text-surface-400">
+              <ListOrdered className="w-8 h-8 mb-2 text-surface-300" />
+              <p className="text-[13px] font-medium text-surface-500">No watchlists yet</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -141,23 +136,19 @@ export default function WatchlistsPage() {
                   onClick={() => loadDetail(wl.id)}
                   className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
                     selectedId === wl.id
-                      ? "bg-primary-50 border border-primary-200"
-                      : "bg-surface-50 hover:bg-surface-100"
+                      ? "bg-primary-500/10 border border-primary-500/30"
+                      : "bg-surface-200/50 hover:bg-surface-200"
                   }`}
                 >
                   <div>
-                    <p className="font-medium text-surface-900">{wl.name}</p>
-                    <p className="text-xs text-surface-700">
-                      {wl.instrument_ids.length} instrument
-                      {wl.instrument_ids.length !== 1 ? "s" : ""}
+                    <p className="text-[13px] font-medium text-surface-700">{wl.name}</p>
+                    <p className="text-[11px] text-surface-400">
+                      {wl.instrument_ids.length} instrument{wl.instrument_ids.length !== 1 ? "s" : ""}
                     </p>
                   </div>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteWatchlist(wl.id);
-                    }}
-                    className="p-1.5 text-surface-200 hover:text-danger-500 rounded"
+                    onClick={(e) => { e.stopPropagation(); deleteWatchlist(wl.id); }}
+                    className="p-1.5 text-surface-400 hover:text-danger-400 rounded transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -175,7 +166,7 @@ export default function WatchlistsPage() {
               {selectedId && (
                 <button
                   onClick={() => setShowAddInstrument(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-surface-200 rounded-lg hover:bg-surface-50"
+                  className="flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium border border-surface-300 rounded-lg hover:bg-surface-200 text-surface-500 transition-colors"
                 >
                   <Plus className="w-3 h-3" /> Add
                 </button>
@@ -183,94 +174,55 @@ export default function WatchlistsPage() {
             </CardHeader>
 
             {!selectedId ? (
-              <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-                <Eye className="w-10 h-10 mb-2 text-surface-200" />
-                <p>Select a watchlist to view instruments</p>
+              <div className="h-64 flex flex-col items-center justify-center text-surface-400">
+                <Eye className="w-8 h-8 mb-2 text-surface-300" />
+                <p className="text-[13px] font-medium text-surface-500">Select a watchlist to view instruments</p>
               </div>
             ) : loadingDetail ? (
-              <div className="h-64 flex items-center justify-center text-surface-700">
-                Loading...
-              </div>
+              <div className="h-64 flex items-center justify-center text-surface-400 text-[13px]">Loading...</div>
             ) : detail?.instruments.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-                <ListOrdered className="w-10 h-10 mb-2 text-surface-200" />
-                <p>No instruments in this watchlist</p>
-                <p className="text-sm text-surface-200 mt-1">
-                  Click + Add to add instruments
-                </p>
+              <div className="h-64 flex flex-col items-center justify-center text-surface-400">
+                <ListOrdered className="w-8 h-8 mb-2 text-surface-300" />
+                <p className="text-[13px] font-medium text-surface-500">No instruments in this watchlist</p>
+                <p className="text-[12px] text-surface-400 mt-1">Click + Add to add instruments</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="border-b border-surface-200">
-                      <th className="text-left py-2 px-3 font-medium text-surface-700">
-                        Symbol
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-surface-700">
-                        Name
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-surface-700">
-                        Type
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-surface-700">
-                        Exchange
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-surface-700">
-                        Status
-                      </th>
-                      <th className="text-right py-2 px-3 font-medium text-surface-700"></th>
+                    <tr className="border-b border-surface-300">
+                      <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Symbol</th>
+                      <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Name</th>
+                      <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Type</th>
+                      <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Exchange</th>
+                      <th className="text-left py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]">Status</th>
+                      <th className="text-right py-2 px-3 font-medium text-surface-400 uppercase tracking-wider text-[11px]"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {detail?.instruments.map((inst) => (
-                      <tr
-                        key={inst.id}
-                        className="border-b border-surface-100 hover:bg-surface-50"
-                      >
+                      <tr key={inst.id} className="border-b border-surface-200 hover:bg-surface-200/50 transition-colors">
                         <td className="py-2.5 px-3">
-                          <Link
-                            href={`/instruments/view?id=${inst.id}`}
-                            className="font-semibold text-primary-600 hover:text-primary-700"
-                          >
-                            {" "}
+                          <Link href={`/instruments/view?id=${inst.id}`} className="font-semibold text-primary-400 hover:text-primary-300">
                             {inst.symbol}
                           </Link>
                         </td>
-                        <td className="py-2.5 px-3 text-surface-900">
-                          {inst.name}
-                        </td>
+                        <td className="py-2.5 px-3 text-surface-600">{inst.name}</td>
                         <td className="py-2.5 px-3">
-                          <span className="px-2 py-0.5 text-xs bg-surface-100 text-surface-700 rounded-full">
-                            {inst.type}
-                          </span>
+                          <span className="px-2 py-0.5 text-[11px] font-medium bg-surface-200 text-surface-500 rounded">{inst.type}</span>
                         </td>
-                        <td className="py-2.5 px-3 text-surface-700">
-                          {inst.exchange ?? "—"}
-                        </td>
+                        <td className="py-2.5 px-3 text-surface-400 font-mono text-[12px]">{inst.exchange ?? "—"}</td>
                         <td className="py-2.5 px-3">
-                          <span
-                            className={`px-2 py-0.5 text-xs rounded-full ${
-                              inst.status === "ACTIVE"
-                                ? "bg-green-50 text-success-600"
-                                : "bg-red-50 text-danger-600"
-                            }`}
-                          >
-                            {inst.status}
-                          </span>
+                          <span className={`px-2 py-0.5 text-[11px] font-medium rounded ${
+                            inst.status === "ACTIVE" ? "bg-success-50 text-success-400" : "bg-danger-50 text-danger-400"
+                          }`}>{inst.status}</span>
                         </td>
                         <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <Link
-                              href={`/instruments/view?id=${inst.id}`}
-                              className="text-primary-600 hover:text-primary-700 text-xs font-medium"
-                            >
+                            <Link href={`/instruments/view?id=${inst.id}`} className="text-primary-400 hover:text-primary-300 text-[12px] font-medium">
                               Chart →
                             </Link>
-                            <button
-                              onClick={() => removeInstrument(inst.id)}
-                              className="p-1 text-surface-200 hover:text-danger-500"
-                            >
+                            <button onClick={() => removeInstrument(inst.id)} className="p-1 text-surface-400 hover:text-danger-400">
                               <X className="w-3 h-3" />
                             </button>
                           </div>
@@ -290,96 +242,54 @@ export default function WatchlistsPage() {
         <AddInstrumentModal
           watchlistId={selectedId}
           onClose={() => setShowAddInstrument(false)}
-          onAdded={() => {
-            loadDetail(selectedId);
-            mutate();
-          }}
+          onAdded={() => { loadDetail(selectedId); mutate(); }}
         />
       )}
     </div>
   );
 }
 
-/* ── Add Instrument Modal ── */
-
 function AddInstrumentModal({
-  watchlistId,
-  onClose,
-  onAdded,
+  watchlistId, onClose, onAdded,
 }: {
-  watchlistId: string;
-  onClose: () => void;
-  onAdded: () => void;
+  watchlistId: string; onClose: () => void; onAdded: () => void;
 }) {
   const [search, setSearch] = useState("");
-  const { data } = useInstruments({
-    search: search || undefined,
-    page_size: 20,
-  });
+  const { data } = useInstruments({ search: search || undefined, page_size: 20 });
   const instruments: Instrument[] = data?.items ?? [];
 
   const add = async (instrumentId: string) => {
-    try {
-      await watchlistsApi.addInstrument(watchlistId, instrumentId);
-      onAdded();
-    } catch (e) {
-      console.error(e);
-    }
+    try { await watchlistsApi.addInstrument(watchlistId, instrumentId); onAdded(); }
+    catch (e) { console.error(e); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <Card className="w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
         <CardHeader>
           <CardTitle>Add Instrument</CardTitle>
-          <button
-            onClick={onClose}
-            className="p-1 text-surface-700 hover:text-surface-900"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <button onClick={onClose} className="p-1 text-surface-400 hover:text-surface-600"><X className="w-4 h-4" /></button>
         </CardHeader>
-
         <div className="mb-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-200" />
-            <input
-              type="text"
-              placeholder="Search by symbol or name..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              autoFocus
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+            <input type="text" placeholder="Search by symbol or name..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2" autoFocus />
           </div>
         </div>
-
         <div className="flex-1 overflow-y-auto space-y-1">
           {instruments.map((inst) => (
-            <div
-              key={inst.id}
-              className="flex items-center justify-between p-2 rounded-lg hover:bg-surface-50"
-            >
+            <div key={inst.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-surface-200 transition-colors">
               <div>
-                <span className="font-semibold text-surface-900">
-                  {inst.symbol}
-                </span>
-                <span className="ml-2 text-sm text-surface-700">
-                  {inst.name}
-                </span>
+                <span className="text-[13px] font-semibold text-surface-700">{inst.symbol}</span>
+                <span className="ml-2 text-[13px] text-surface-400">{inst.name}</span>
               </div>
-              <button
-                onClick={() => add(inst.id)}
-                className="px-3 py-1 text-xs font-medium text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50"
-              >
+              <button onClick={() => add(inst.id)} className="px-3 py-1 text-[12px] font-medium text-primary-400 border border-primary-500/30 rounded hover:bg-primary-500/10 transition-colors">
                 Add
               </button>
             </div>
           ))}
           {search && instruments.length === 0 && (
-            <p className="text-center text-sm text-surface-700 py-4">
-              No instruments found
-            </p>
+            <p className="text-center text-[13px] text-surface-400 py-4">No instruments found</p>
           )}
         </div>
       </Card>

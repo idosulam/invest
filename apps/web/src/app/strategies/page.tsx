@@ -110,7 +110,7 @@ function StrategyCardView({
             <p className="text-sm text-surface-700 mt-1 max-w-xl">{strategy.description}</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {strategy.tags.map((tag) => (
-                <span key={tag} className="px-2 py-0.5 text-xs bg-surface-100 text-surface-600 rounded-full">
+                <span key={tag} className="px-2 py-0.5 text-xs bg-surface-200 text-surface-600 rounded-full">
                   {tag}
                 </span>
               ))}
@@ -159,7 +159,7 @@ function StrategyCardView({
 
       {/* Expanded: per-instrument breakdown */}
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-surface-200">
+        <div className="mt-4 pt-4 border-t border-surface-300">
           <p className="text-sm font-semibold text-surface-900 mb-3">
             Per-Instrument Backtest Results ({performances.length})
           </p>
@@ -172,7 +172,7 @@ function StrategyCardView({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-surface-200">
+                  <tr className="border-b border-surface-300">
                     <th className="text-left py-2 px-2 text-xs font-medium text-surface-500">Symbol</th>
                     <th className="text-right py-2 px-2 text-xs font-medium text-surface-500">Return</th>
                     <th className="text-right py-2 px-2 text-xs font-medium text-surface-500">Win Rate</th>
@@ -185,7 +185,7 @@ function StrategyCardView({
                 </thead>
                 <tbody>
                   {performances.map((perf) => (
-                    <tr key={perf.instrument_id} className="border-b border-surface-100 hover:bg-surface-50">
+                    <tr key={perf.instrument_id} className="border-b border-surface-200 hover:bg-surface-200">
                       <td className="py-2 px-2 font-medium text-surface-900">{perf.symbol}</td>
                       <td className={`py-2 px-2 text-right font-mono ${(perf.total_return ?? 0) > 0 ? "text-success-600" : (perf.total_return ?? 0) < 0 ? "text-danger-600" : "text-surface-700"}`}>
                         {perf.total_return !== null ? format.pct(perf.total_return) : "—"}
@@ -285,7 +285,7 @@ export default function StrategiesPage() {
             <select
               value={horizonFilter}
               onChange={(e) => setHorizonFilter(e.target.value)}
-              className="text-sm border border-surface-200 rounded-lg px-3 py-2"
+              className="text-sm border border-surface-300 rounded-lg px-3 py-2"
             >
               <option value="">All Horizons</option>
               <option value="LONG_TERM">Long Term</option>
@@ -357,7 +357,7 @@ export default function StrategiesPage() {
       ) : strategiesList.length === 0 ? (
         <Card>
           <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-            <Target className="w-10 h-10 mb-2 text-surface-200" />
+            <Target className="w-10 h-10 mb-2 text-surface-400" />
             <p className="font-medium">No strategies registered</p>
             <p className="text-sm text-surface-400 mt-1">
               Strategies are auto-discovered from the codebase on startup

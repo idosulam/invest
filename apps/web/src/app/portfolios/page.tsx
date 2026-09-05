@@ -68,7 +68,7 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-300">
           <h2 className="text-lg font-semibold text-surface-900">{title}</h2>
           <button
             onClick={onClose}
@@ -150,7 +150,7 @@ function AddPositionModal({
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
             placeholder="AAPL"
-            className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
             autoFocus
           />
         </div>
@@ -166,7 +166,7 @@ function AddPositionModal({
               placeholder="100"
               min="0"
               step="any"
-              className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
@@ -180,14 +180,14 @@ function AddPositionModal({
               placeholder="185.50"
               min="0"
               step="any"
-              className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-surface-700 mb-1">
             Current Price ($){" "}
-            <span className="text-surface-200 font-normal">— optional, auto-fetched</span>
+            <span className="text-surface-400 font-normal">— optional, auto-fetched</span>
           </label>
           <input
             type="number"
@@ -196,7 +196,7 @@ function AddPositionModal({
             placeholder="Leave empty for live price"
             min="0"
             step="any"
-            className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
         {error && (
@@ -312,7 +312,7 @@ function BulkImportModal({
                 value={row.symbol}
                 onChange={(e) => updateRow(i, "symbol", e.target.value)}
                 placeholder="AAPL"
-                className="flex-1 text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="flex-1 text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <input
                 type="number"
@@ -321,7 +321,7 @@ function BulkImportModal({
                 placeholder="Qty"
                 min="0"
                 step="any"
-                className="w-24 text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-24 text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <input
                 type="number"
@@ -330,12 +330,12 @@ function BulkImportModal({
                 placeholder="Avg Cost"
                 min="0"
                 step="any"
-                className="w-28 text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-28 text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               {rows.length > 1 && (
                 <button
                   onClick={() => removeRow(i)}
-                  className="p-1 text-surface-200 hover:text-danger-600"
+                  className="p-1 text-surface-400 hover:text-danger-600"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -476,7 +476,7 @@ function IBKRImportModal({
             type="file"
             accept=".csv,.txt"
             onChange={handleFile}
-            className="w-full text-sm border border-surface-200 rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-primary-50 file:text-primary-700"
+            className="w-full text-sm border border-surface-300 rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-primary-50 file:text-primary-700"
           />
         </div>
 
@@ -495,7 +495,7 @@ Or simple CSV:
 Symbol,Quantity,Cost Basis
 AAPL,100,185.50`}
             rows={8}
-            className="w-full text-sm font-mono border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full text-sm font-mono border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
 
@@ -691,7 +691,7 @@ export default function PortfoliosPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-700 border border-surface-300 rounded-lg hover:bg-surface-200"
             >
               <Plus className="w-4 h-4" /> New Portfolio
             </button>
@@ -718,7 +718,7 @@ export default function PortfoliosPage() {
                 <button
                   onClick={refreshPositions}
                   disabled={refreshing}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-surface-700 border border-surface-300 rounded-lg hover:bg-surface-200 disabled:opacity-50"
                   title="Refresh live prices"
                 >
                   <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -739,7 +739,7 @@ export default function PortfoliosPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && createPortfolio()}
-              className="flex-1 text-sm border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="flex-1 text-sm border border-surface-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               autoFocus
             />
             <button
@@ -823,9 +823,9 @@ export default function PortfoliosPage() {
             </div>
           ) : positions.length === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-surface-700">
-              <Briefcase className="w-10 h-10 mb-2 text-surface-200" />
+              <Briefcase className="w-10 h-10 mb-2 text-surface-400" />
               <p>No positions yet</p>
-              <p className="text-sm text-surface-200 mt-1">
+              <p className="text-sm text-surface-400 mt-1">
                 Click "Add Position" or "Import IBKR" to get started
               </p>
             </div>
@@ -833,7 +833,7 @@ export default function PortfoliosPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-surface-200">
+                  <tr className="border-b border-surface-300">
                     <th className="text-left py-2 px-3 font-medium text-surface-700">
                       Symbol
                     </th>
@@ -859,7 +859,7 @@ export default function PortfoliosPage() {
                   {positions.map((pos) => (
                     <tr
                       key={pos.id}
-                      className="border-b border-surface-100 hover:bg-surface-50"
+                      className="border-b border-surface-200 hover:bg-surface-200"
                     >
                       <td className="py-2.5 px-3">
                         <Link
@@ -898,7 +898,7 @@ export default function PortfoliosPage() {
                       <td className="py-2.5 px-3 text-right">
                         <button
                           onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(pos.id); setConfirmDeleteSymbol(pos.symbol || pos.instrument_name || "this position"); }}
-                          className="p-1.5 text-surface-400 hover:text-danger-500 rounded hover:bg-surface-100"
+                          className="p-1.5 text-surface-400 hover:text-danger-500 rounded hover:bg-surface-200"
                           title="Delete position"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -967,7 +967,7 @@ export default function PortfoliosPage() {
                             </span>
                             <span className="text-surface-700">{pct}%</span>
                           </div>
-                          <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
+                          <div className="h-2 bg-surface-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-primary-500 rounded-full"
                               style={{ width: `${pct}%` }}

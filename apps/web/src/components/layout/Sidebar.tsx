@@ -41,19 +41,18 @@ export function Sidebar() {
   const { user, logout, isAdmin } = useAuth();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-56 bg-surface-900 text-white flex flex-col">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-56 bg-surface-100 border-r border-surface-300 flex flex-col">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-5 py-5 border-b border-surface-700">
-        <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center font-bold text-sm">
-          MP
+      <div className="flex items-center gap-2.5 px-5 h-14 border-b border-surface-300">
+        <div className="w-7 h-7 bg-primary-600 rounded flex items-center justify-center">
+          <span className="text-xs font-bold text-white">MP</span>
         </div>
-        <span className="text-lg font-semibold tracking-tight">Market Platform</span>
+        <span className="text-sm font-semibold text-surface-800 tracking-tight">Market Platform</span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
-          // Hide Operations for non-admins
           if (item.href === "/operations" && !isAdmin) return null;
 
           const isActive =
@@ -64,13 +63,13 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={clsx(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors",
                 isActive
-                  ? "bg-primary-600 text-white"
-                  : "text-surface-200 hover:bg-surface-800 hover:text-white"
+                  ? "bg-primary-600/15 text-primary-400"
+                  : "text-surface-500 hover:bg-surface-200 hover:text-surface-700"
               )}
             >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
+              <item.icon className="w-4 h-4 flex-shrink-0" />
               {item.label}
             </Link>
           );
@@ -78,29 +77,28 @@ export function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="px-3 py-3 border-t border-surface-700">
-        <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-8 h-8 bg-surface-700 rounded-full flex items-center justify-center">
-            <User className="w-4 h-4 text-surface-200" />
+      <div className="px-3 py-3 border-t border-surface-300">
+        <div className="flex items-center gap-2.5 px-3 py-2">
+          <div className="w-7 h-7 bg-surface-200 rounded-full flex items-center justify-center">
+            <User className="w-3.5 h-3.5 text-surface-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.username}</p>
-            <p className="text-xs text-surface-200">{user?.role}</p>
+            <p className="text-[13px] font-medium text-surface-700 truncate">{user?.username}</p>
+            <p className="text-[11px] text-surface-400">{user?.role}</p>
           </div>
           <button
             onClick={logout}
-            className="p-1.5 rounded-lg text-surface-200 hover:text-white hover:bg-surface-800 transition-colors"
+            className="p-1.5 rounded text-surface-400 hover:text-surface-700 hover:bg-surface-200 transition-colors"
             title="Sign out"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-surface-700 text-xs text-surface-200">
-        <p>Research & paper trading only.</p>
-        <p className="text-surface-700 mt-1">v0.1.0</p>
+      <div className="px-5 py-2.5 border-t border-surface-300">
+        <p className="text-[11px] text-surface-400">Research & paper trading only</p>
       </div>
     </aside>
   );

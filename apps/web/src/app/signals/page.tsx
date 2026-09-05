@@ -57,8 +57,8 @@ const STATE_CONFIG: Record<string, { color: string; bg: string; icon: any; label
   EXIT: { color: "text-danger-600", bg: "bg-red-50", icon: TrendingDown, label: "Exit" },
   REDUCE: { color: "text-warning-600", bg: "bg-amber-50", icon: Minus, label: "Reduce" },
   HOLD: { color: "text-primary-600", bg: "bg-blue-50", icon: Eye, label: "Hold" },
-  WATCH: { color: "text-surface-700", bg: "bg-surface-100", icon: Eye, label: "Watch" },
-  NO_SIGNAL: { color: "text-surface-200", bg: "bg-surface-50", icon: Minus, label: "No Signal" },
+  WATCH: { color: "text-surface-700", bg: "bg-surface-200", icon: Eye, label: "Watch" },
+  NO_SIGNAL: { color: "text-surface-400", bg: "bg-surface-200", icon: Minus, label: "No Signal" },
 };
 
 const STATE_GUIDANCE: Record<string, string> = {
@@ -139,7 +139,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
               <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${stateCfg.bg} ${stateCfg.color}`}>
                 {stateCfg.label}
               </span>
-              <span className="px-2 py-0.5 text-xs bg-surface-100 text-surface-700 rounded-full">
+              <span className="px-2 py-0.5 text-xs bg-surface-200 text-surface-700 rounded-full">
                 {signal.horizon}
               </span>
             </div>
@@ -155,7 +155,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
           <div className="text-right">
             <p className="text-xs text-surface-700 mb-1">Confidence</p>
             <div className="flex items-center gap-2">
-              <div className="w-16 h-2 bg-surface-100 rounded-full overflow-hidden">
+              <div className="w-16 h-2 bg-surface-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${
                     signal.confidence > 0.7 ? "bg-success-500" : signal.confidence > 0.4 ? "bg-warning-500" : "bg-danger-500"
@@ -199,13 +199,13 @@ function SignalCard({ signal }: { signal: SignalData }) {
           </button>
 
           {/* Expand */}
-          {expanded ? <ChevronUp className="w-4 h-4 text-surface-200" /> : <ChevronDown className="w-4 h-4 text-surface-200" />}
+          {expanded ? <ChevronUp className="w-4 h-4 text-surface-400" /> : <ChevronDown className="w-4 h-4 text-surface-400" />}
         </div>
       </div>
 
       {/* Expanded details */}
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-surface-200 space-y-4">
+        <div className="mt-4 pt-4 border-t border-surface-300 space-y-4">
           {/* Plain-language guidance */}
           <div className={`rounded-lg p-3 text-sm ${stateCfg.bg} ${stateCfg.color}`}>
             <span className="font-medium">{stateCfg.label}:</span>{" "}
@@ -256,7 +256,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
           {signal.target_method && (
             <div>
               <p className="text-xs text-surface-700 mb-1">Target Method</p>
-              <span className="px-2 py-0.5 text-xs bg-surface-100 text-surface-700 rounded-full">
+              <span className="px-2 py-0.5 text-xs bg-surface-200 text-surface-700 rounded-full">
                 {signal.target_method.replace(/_/g, " ")}
               </span>
             </div>
@@ -276,7 +276,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
                 { label: "Model Calibration", weight: "10%" },
                 { label: "Parameter Sensitivity", weight: "10%" },
               ].map((comp) => (
-                <div key={comp.label} className="bg-surface-50 rounded p-2">
+                <div key={comp.label} className="bg-surface-200 rounded p-2">
                   <p className="text-xs text-surface-700">{comp.label}</p>
                   <p className="text-xs text-surface-500">{comp.weight}</p>
                 </div>
@@ -316,7 +316,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
 
       {/* AI Explanation */}
       {explanation && (
-        <div className="mt-4 pt-4 border-t border-surface-200">
+        <div className="mt-4 pt-4 border-t border-surface-300">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary-500" />
@@ -329,10 +329,10 @@ function SignalCard({ signal }: { signal: SignalData }) {
               Close
             </button>
           </div>
-          <div className="text-sm text-surface-700 whitespace-pre-wrap bg-surface-50 rounded-lg p-3">
+          <div className="text-sm text-surface-700 whitespace-pre-wrap bg-surface-200 rounded-lg p-3">
             {explanation}
           </div>
-          <p className="text-xs text-surface-200 mt-2">
+          <p className="text-xs text-surface-400 mt-2">
             ⚠️ Research analysis only — not financial advice.
           </p>
         </div>
@@ -520,7 +520,7 @@ export default function SignalsPage() {
               value={genInstrumentId}
               onChange={(e) => setGenInstrumentId(e.target.value)}
               placeholder="Instrument ID"
-              className="text-sm border border-surface-200 rounded-lg px-3 py-2 w-48"
+              className="text-sm border border-surface-300 rounded-lg px-3 py-2 w-48"
             />
             <button
               onClick={generateSignals}
@@ -552,7 +552,7 @@ export default function SignalsPage() {
             <select
               value={horizonFilter}
               onChange={(e) => setHorizonFilter(e.target.value)}
-              className="text-sm border border-surface-200 rounded-lg px-3 py-2"
+              className="text-sm border border-surface-300 rounded-lg px-3 py-2"
             >
               <option value="">All Horizons</option>
               <option value="LONG_TERM">Long Term</option>
@@ -562,7 +562,7 @@ export default function SignalsPage() {
             <select
               value={stateFilter}
               onChange={(e) => setStateFilter(e.target.value)}
-              className="text-sm border border-surface-200 rounded-lg px-3 py-2"
+              className="text-sm border border-surface-300 rounded-lg px-3 py-2"
             >
               <option value="">All States</option>
               <option value="ENTER_LONG">Enter Long</option>
@@ -652,7 +652,7 @@ export default function SignalsPage() {
                             ? "bg-red-50 text-danger-600"
                             : actionLabel === "REDUCE"
                             ? "bg-amber-50 text-warning-600"
-                            : "bg-surface-100 text-surface-700"
+                            : "bg-surface-200 text-surface-700"
                         }`}
                       >
                         {actionLabel}
@@ -700,7 +700,7 @@ export default function SignalsPage() {
                   </div>
 
                   {item.strategy_breakdown?.length > 0 && (
-                    <details className="pt-3 border-t border-surface-200">
+                    <details className="pt-3 border-t border-surface-300">
                       <summary className="text-xs font-medium text-surface-900 cursor-pointer">
                         Show strategy breakdown ({item.strategy_breakdown.length})
                       </summary>
@@ -708,7 +708,7 @@ export default function SignalsPage() {
                         {item.strategy_breakdown.map((s: any, sidx: number) => (
                           <span
                             key={sidx}
-                            className="text-xs px-2 py-1 rounded-lg bg-surface-100 text-surface-700"
+                            className="text-xs px-2 py-1 rounded-lg bg-surface-200 text-surface-700"
                           >
                             {s.strategy}: {s.state}
                             {s.win_rate != null && (
@@ -720,7 +720,7 @@ export default function SignalsPage() {
                     </details>
                   )}
 
-                  <p className="text-xs text-surface-400 pt-3 border-t border-surface-200 mt-3">
+                  <p className="text-xs text-surface-400 pt-3 border-t border-surface-300 mt-3">
                     Combines technical strategies, news, and congressional trading activity.
                     Does not yet include institutional 13F filings. This is reasoning over
                     available evidence, not a statistical forecast.
@@ -743,9 +743,9 @@ export default function SignalsPage() {
       ) : signals.length === 0 ? (
         <Card>
           <div className="h-64 flex flex-col items-center justify-center text-surface-700">
-            <Activity className="w-10 h-10 mb-2 text-surface-200" />
+            <Activity className="w-10 h-10 mb-2 text-surface-400" />
             <p className="font-medium">No signals yet</p>
-            <p className="text-sm text-surface-200 mt-1">
+            <p className="text-sm text-surface-400 mt-1">
               Run signal generation from the API or add instruments with bar data
             </p>
           </div>
