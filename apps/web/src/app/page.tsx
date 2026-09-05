@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Link from "next/link";
 import {
   TrendingUp,
   TrendingDown,
