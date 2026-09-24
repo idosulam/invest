@@ -182,6 +182,31 @@ async def run_consolidated_analysis(
         sentiment_report = None
         sentiment_markdown = "Sentiment analysis unavailable."
 
+    # ── Step 1b/1c: Fundamental + News analysts (full TradingAgents analyst team) ──
+    # Reflect loop: deterministic lessons from past decisions feed the analysts.
+    try:
+        from packages.agents.reflect import lessons_block as _lessons_block
+        from packages.agents.memory import DecisionMemoryLog
+        reflect_lessons = _lessons_block(DecisionMemoryLog().load_entries())
+    except Exception:
+        reflect_lessons = ""
+
+    fundamental_markdown = ""
+    try:
+        from packages.agents.analysts import analyze_fundamentals
+        _, fundamental_markdown = await analyze_fundamentals(db, instrument_id, lessons=reflect_lessons)
+    except Exception as e:
+        logger.warning(f"[{symbol}] Fundamental analysis failed: {e}")
+        fundamental_markdown = "Fundamental analysis unavailable."
+
+    news_markdown = ""
+    try:
+        from packages.agents.analysts import analyze_news
+        _, news_markdown = await analyze_news(db, instrument_id, lessons=reflect_lessons)
+    except Exception as e:
+        logger.warning(f"[{symbol}] News analysis failed: {e}")
+        news_markdown = "News analysis unavailable."
+
     # ── Step 2: Technical Strategies ──
     logger.info(f"[{symbol}] Running technical strategies...")
     technical_signals = await generate_signals_for_instrument(db, instrument_id)
@@ -279,6 +304,8 @@ async def run_consolidated_analysis(
     sentiment_section = ""
     if sentiment_report:
         sentiment_section = f"SENTIMENT ANALYSIS:\n{sentiment_markdown}\n\n"
+    fundamental_section = f"FUNDAMENTAL ANALYSIS:\n{fundamental_markdown}\n\n" if fundamental_markdown else ""
+    news_section = f"NEWS ANALYSIS:\n{news_markdown}\n\n" if news_markdown else ""
 
     past_context_section = ""
     if past_context:
@@ -289,6 +316,8 @@ async def run_consolidated_analysis(
         f"TECHNICAL STRATEGIES ({counted} with signal, out of {len(technical_signals)}):\n"
         f"{strategy_lines}\n\n"
         f"{sentiment_section}"
+        f"{fundamental_section}"
+        f"{news_section}"
         f"{debate_section}"
         f"{past_context_section}"
     )
@@ -299,7 +328,8 @@ async def run_consolidated_analysis(
         "You are the chief analyst synthesizing multiple inputs into ONE trade proposal. "
         "You are given: (1) technical strategies with confidence and backtest win rates, "
         "(2) a sentiment report with band/score/confidence, (3) a bull/bear debate verdict, "
-        "(4) Wall Street analyst consensus. These inputs may disagree — that is normal.\n\n"
+        "(4) Wall Street analyst consensus, (5) a fundamental quality report, and "
+        "(6) a news-flow report. These inputs may disagree — that is normal.\n\n"
         "IMPORTANT:\n"
         "- Weigh strategies by historical win rate\n"
         "- Ground entry/stop/price levels in the CURRENT PRICE\n"

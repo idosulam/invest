@@ -14,7 +14,7 @@ from typing import Optional
 
 from sqlalchemy import desc, select
 
-from apps.api.database import async_session
+from apps.api.database import async_session_factory
 from packages.domain.entities.models import JobRun
 from packages.agents.consolidate import run_consolidated_analysis
 from packages.portfolio.context import get_position_context
@@ -40,7 +40,7 @@ async def _run_analysis_job(
     try:
         for i, inst_id in enumerate(instrument_ids):
             job["progress"] = {"done": i, "total": total}
-            async with async_session() as db:
+            async with async_session_factory() as db:
                 qty, avg_cost, pf_value = await get_position_context(db, user_id, inst_id)
                 sig = await run_consolidated_analysis(
                     db,
@@ -60,7 +60,7 @@ async def _run_analysis_job(
         job["completed_at"] = datetime.utcnow().isoformat()
         job["progress"] = {"done": len(results) or total, "total": total}
         try:
-            async with async_session() as db:
+            async with async_session_factory() as db:
                 row = (
                     await db.execute(select(JobRun).where(JobRun.id == uuid.UUID(job_id)))
                 ).scalar_one_or_none()
@@ -82,7 +82,7 @@ async def start_analysis_job(
     job_name = f"analysis_{scope}"
     now = datetime.utcnow()
 
-    async with async_session() as db:
+    async with async_session_factory() as db:
         db.add(JobRun(id=uuid.UUID(job_id), job_name=job_name, status="RUNNING", started_at=now))
         await db.commit()
 
@@ -109,7 +109,7 @@ def get_job(job_id: str) -> Optional[dict]:
 
 async def last_run(scope: str) -> dict:
     job_name = f"analysis_{scope}"
-    async with async_session() as db:
+    async with async_session_factory() as db:
         q = await db.execute(
             select(JobRun)
             .where(JobRun.job_name == job_name)

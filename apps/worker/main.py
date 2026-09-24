@@ -135,7 +135,7 @@ async def run_job(job_name: str) -> dict:
 async def _daily_ingestion() -> dict:
     """Ingest daily bars for all active instruments."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from packages.data.providers.yahoo_finance import YahooFinanceProvider
         from packages.data.ingestion.pipeline import IngestionPipeline
         from packages.domain.enums.common import Timeframe
@@ -145,7 +145,7 @@ async def _daily_ingestion() -> dict:
         provider = YahooFinanceProvider()
         pipeline = IngestionPipeline(provider)
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             result = await db.execute(
                 select(Instrument.symbol).where(Instrument.status == "ACTIVE")
             )
@@ -170,7 +170,7 @@ async def _daily_ingestion() -> dict:
 async def _intraday_ingestion() -> dict:
     """Ingest intraday bars for watched instruments."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from packages.data.providers.yahoo_finance import YahooFinanceProvider
         from packages.data.ingestion.pipeline import IngestionPipeline
         from packages.domain.enums.common import Timeframe
@@ -180,7 +180,7 @@ async def _intraday_ingestion() -> dict:
         provider = YahooFinanceProvider()
         pipeline = IngestionPipeline(provider)
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             # Get all watchlist instruments
             result = await db.execute(select(Watchlist))
             watchlists = result.scalars().all()
@@ -218,14 +218,14 @@ async def _corporate_actions_update() -> dict:
 async def _sec_filings_update() -> dict:
     """Check for new SEC filings."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from packages.data.providers.sec_edgar import SECEdgarProvider
         from sqlalchemy import select
         from packages.domain.entities.models import Instrument
 
         provider = SECEdgarProvider()
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             result = await db.execute(
                 select(Instrument.symbol).where(
                     Instrument.status == "ACTIVE",
@@ -250,14 +250,14 @@ async def _sec_filings_update() -> dict:
 async def _quality_checks() -> dict:
     """Run data quality validation."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from packages.data.quality.validator import DataValidator
         from sqlalchemy import select, func
         from packages.domain.entities.models import MarketBar, DataIssue
 
         validator = DataValidator()
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             # Count bars with issues
             total = (await db.execute(select(func.count()).select_from(MarketBar))).scalar() or 0
 
@@ -277,12 +277,12 @@ async def _quality_checks() -> dict:
 async def _signal_generation() -> dict:
     """Generate signals for all active instruments."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from packages.strategies.engine import generate_signals_for_instrument
         from sqlalchemy import select
         from packages.domain.entities.models import Instrument
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             result = await db.execute(
                 select(Instrument.id).where(Instrument.status == "ACTIVE").limit(100)
             )
@@ -307,12 +307,12 @@ async def _signal_generation() -> dict:
 async def _alert_evaluation() -> dict:
     """Evaluate alert rules and send notifications."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from sqlalchemy import select
         from packages.domain.entities.models import AlertRule, MarketBar, Instrument
         from datetime import datetime
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             result = await db.execute(
                 select(AlertRule).where(AlertRule.enabled == True)
             )
@@ -344,11 +344,11 @@ async def _alert_evaluation() -> dict:
 async def _portfolio_mtm() -> dict:
     """Update portfolio mark-to-market valuations."""
     try:
-        from apps.api.database import async_session
+        from apps.api.database import async_session_factory
         from sqlalchemy import select
         from packages.domain.entities.models import Portfolio, Position, MarketBar
 
-        async with async_session() as db:
+        async with async_session_factory() as db:
             result = await db.execute(select(Portfolio))
             portfolios = result.scalars().all()
 
