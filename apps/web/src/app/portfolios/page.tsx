@@ -69,10 +69,10 @@ function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-300">
-          <h2 className="text-lg font-semibold text-surface-900">{title}</h2>
+          <h2 className="text-lg font-semibold text-surface-100">{title}</h2>
           <button
             onClick={onClose}
-            className="p-1 text-surface-500 hover:text-surface-900 rounded"
+            className="p-1 text-surface-400 hover:text-surface-200 rounded"
           >
             <X className="w-5 h-5" />
           </button>
@@ -462,14 +462,14 @@ function IBKRImportModal({
   return (
     <Modal title="Import from IBKR" onClose={onClose}>
       <div className="space-y-4">
-        <p className="text-sm text-surface-700">
+        <p className="text-sm text-surface-200">
           Paste your IBKR Activity Statement CSV or upload a file. The importer
           automatically detects the format — both IBKR Activity Statements
           (Open Positions section) and simple CSV (Symbol, Quantity, Cost Basis) work.
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-surface-700 mb-1">
+          <label className="block text-sm font-medium text-surface-200 mb-1">
             Upload CSV File
           </label>
           <input
@@ -481,7 +481,7 @@ function IBKRImportModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-surface-700 mb-1">
+          <label className="block text-sm font-medium text-surface-200 mb-1">
             Or Paste CSV Content
           </label>
           <textarea
@@ -513,7 +513,7 @@ AAPL,100,185.50`}
             {result.positions?.length > 0 && (
               <div className="mt-1 space-y-0.5">
                 {result.positions.map((p: any, i: number) => (
-                  <p key={i} className="text-xs text-surface-700">
+                  <p key={i} className="text-xs text-surface-300">
                     {p.symbol}: {p.quantity} shares @ ${p.avg_cost}
                     {p.current_price ? ` (now $${p.current_price})` : ""}
                   </p>
@@ -535,7 +535,7 @@ AAPL,100,185.50`}
         <div className="flex justify-end gap-2 pt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-surface-700 hover:text-surface-900"
+            className="px-4 py-2 text-sm text-surface-200 hover:text-surface-100"
           >
             Cancel
           </button>
