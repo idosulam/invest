@@ -377,6 +377,13 @@ class ConsolidatedResponse(BaseModel):
     strategy_breakdown: list[dict]
     debate_included: bool = True
     llm_used: bool
+    # Realistic, likelihood-anchored additions:
+    current_price: Optional[float] = None
+    horizon_days: Optional[int] = None
+    till_date: Optional[str] = None
+    entry_probability: Optional[float] = None
+    entry_plan: Optional[dict] = None
+    portfolio_action: Optional[dict] = None
 
 
 @router.post("/consolidated/{instrument_id}", response_model=ConsolidatedResponse)
@@ -390,9 +397,17 @@ async def run_consolidated_endpoint(
     deterministic vote if the LLM is unreachable.
     """
     from packages.agents.consolidate import run_consolidated_analysis
+    from packages.portfolio.context import get_position_context
+
+    # Portfolio context so the signal is personalized to THIS user's holding.
+    qty, avg_cost, pf_value = await get_position_context(db, _user.id, instrument_id)
 
     try:
-        result = await run_consolidated_analysis(db, instrument_id)
+        result = await run_consolidated_analysis(
+            db, instrument_id,
+            position_qty=qty, avg_cost=avg_cost, portfolio_value=pf_value,
+            target_weight=0.05,
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -410,6 +425,12 @@ async def run_consolidated_endpoint(
         strategy_breakdown=result.strategy_breakdown,
         debate_included=result.debate_included,
         llm_used=result.llm_used,
+        current_price=result.current_price,
+        horizon_days=result.horizon_days,
+        till_date=result.till_date,
+        entry_probability=result.entry_probability,
+        entry_plan=result.entry_plan,
+        portfolio_action=result.portfolio_action,
     )
 
 

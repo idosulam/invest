@@ -134,6 +134,54 @@ export const signals = {
   },
 };
 
+/* ── Background Analysis ── */
+
+export interface AnalysisJobStart {
+  job_id: string;
+  job_name: string;
+  status: string;
+  started_at: string;
+  scope: string;
+  total: number;
+}
+
+export interface AnalysisJobStatus {
+  job_id: string;
+  job_name: string;
+  scope: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED";
+  started_at: string | null;
+  completed_at: string | null;
+  progress: { done: number; total: number };
+  results: any[] | null;
+  error: string | null;
+}
+
+export interface AnalysisLastRun {
+  scope: string;
+  last_run_at: string | null;
+  last_status: string | null;
+  last_job_id: string | null;
+}
+
+export const analysis = {
+  /** Start a background full-analysis job (portfolio | discover | single). */
+  run: (body: {
+    scope: "portfolio" | "discover" | "single";
+    instrument_id?: string;
+    target_weight?: number;
+  }) =>
+    request<AnalysisJobStart>("/analysis/run", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Lightweight job-status poll. On SUCCESS, `results` holds the consolidated results. */
+  job: (jobId: string) => request<AnalysisJobStatus>(`/analysis/jobs/${jobId}`),
+  /** Last run metadata for the "Last run …" badge. */
+  lastRun: (scope: "portfolio" | "discover") =>
+    request<AnalysisLastRun>(`/analysis/last-run?scope=${scope}`),
+};
+
 /* ── Portfolios ── */
 
 export const portfolios = {

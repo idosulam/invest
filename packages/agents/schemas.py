@@ -357,3 +357,10 @@ class ConsolidatedSignal(BaseModel):
     strategy_breakdown: list[dict] = Field(default_factory=list)
     debate_included: bool = True
     llm_used: bool = True
+    # Realistic, likelihood-anchored additions (deterministic, non-LLM):
+    current_price: float | None = None
+    horizon_days: int | None = None
+    till_date: str | None = None
+    entry_probability: float | None = None
+    entry_plan: dict | None = None
+    portfolio_action: dict | None = None

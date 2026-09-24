@@ -40,6 +40,8 @@ from packages.agents.structured import structured_chat
 from packages.strategies.engine import generate_signals_for_instrument
 from packages.domain.enums.common import SignalState
 from packages.domain.entities.models import Instrument
+from packages.risk import probability as _prob
+from packages.portfolio.action_advisor import PositionContext as _Ctx, recommend as _recommend
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,48 @@ def _deterministic_lean(technical_signals: list[dict]) -> tuple[float, int]:
     return weighted_sum / total_weight, counted
 
 
-async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> ConsolidatedSignal:
+async def _recent_closes(db: AsyncSession, instrument_id, limit: int = 90) -> list[float]:
+    """Recent daily closes (oldest->newest) for a volatility estimate."""
+    from sqlalchemy import select as _sel
+    from packages.domain.entities.models import MarketBar as _MB
+    from packages.domain.enums.common import Timeframe as _TF
+    r = await db.execute(
+        _sel(_MB.close)
+        .where(_MB.instrument_id == instrument_id, _MB.timeframe == _TF.DAILY)
+        .order_by(_MB.ts_open.desc())
+        .limit(limit)
+    )
+    rows = [float(x[0]) for x in r.all()]
+    rows.reverse()
+    return rows
+
+
+def _horizon_days_from(pm_decision) -> int:
+    """Per-stock 'till when': horizon in trading days from the PM holding period."""
+    txt = (getattr(pm_decision, "time_horizon", None) or "").lower()
+    if "year" in txt:
+        return 252
+    if "month" in txt:
+        nums = re.findall(r"\d+", txt)
+        return min(252, (max(int(n) for n in nums) if nums else 6) * 21)
+    if "week" in txt:
+        nums = re.findall(r"\d+", txt)
+        return max(5, (max(int(n) for n in nums) if nums else 3) * 5)
+    if "day" in txt:
+        return 5
+    return 30
+
+
+async def run_consolidated_analysis(
+    db: AsyncSession,
+    instrument_id,
+    *,
+    position_qty: float = 0.0,
+    avg_cost: float = 0.0,
+    portfolio_value: float = 0.0,
+    target_weight: float = 0.05,
+    stop_price: float | None = None,
+) -> ConsolidatedSignal:
     """Run the full multi-agent analysis pipeline.
 
     Pipeline:
@@ -262,7 +305,10 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
         "- Ground entry/stop/price levels in the CURRENT PRICE\n"
         "- Stop-loss must be below entry zone, take-profit above\n"
         "- Minimum 2:1 reward-to-risk ratio\n"
-        "- Be specific with numbers, not vague ranges"
+        "- Be specific with numbers, not vague ranges\n"
+        "- For entry, prefer a REALISTIC plan over 'wait for a dip that may never come':\n"
+        "  state a concrete entry level AND acknowledge how reachable it is. If price is\n"
+        "  extended, suggest scaling in rather than waiting for a deep pullback."
     )
 
     chief_user = (
@@ -367,6 +413,69 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
     except Exception as e:
         logger.warning(f"[{symbol}] Failed to store decision in memory: {e}")
 
+    # ── Step 7: Realistic entry plan + portfolio-aware action (deterministic) ──
+    horizon_days = _horizon_days_from(pm_decision)
+    expires = _prob.till_date(horizon_days)
+
+    annual_vol = 0.30
+    try:
+        closes = await _recent_closes(db, instrument_id, limit=90)
+        if len(closes) >= 2:
+            annual_vol = _prob.annualized_volatility(closes)
+    except Exception as e:
+        logger.warning(f"[{symbol}] vol estimate failed, defaulting 0.30: {e}")
+
+    dream_entry = proposal.entry_price if proposal.entry_price else (
+        round(current_price * 0.97, 2) if current_price else None
+    )
+    entry_probability = None
+    entry_plan = None
+    if current_price and dream_entry and final_state in ("ENTER_LONG", "HOLD", "WATCH"):
+        try:
+            plan = _prob.realistic_entry_plan(
+                current_price, dream_entry, horizon_days, annual_vol, direction="long"
+            )
+            entry_probability = plan.prob_reach_entry
+            entry_plan = {
+                "current": plan.current,
+                "dream_entry": plan.dream_entry,
+                "prob_reach_entry": round(plan.prob_reach_entry, 4),
+                "likely_to_miss": plan.likely_to_miss,
+                "horizon_days": plan.horizon_days,
+                "expires": plan.expires.isoformat(),
+                "expected_entry": plan.expected_entry,
+                "ladders": [
+                    {"trigger": r.trigger, "fraction": r.fraction, "note": r.note}
+                    for r in plan.ladders
+                ],
+                "plain_language": plan.plain_language,
+            }
+        except Exception as e:
+            logger.warning(f"[{symbol}] entry plan failed: {e}")
+
+    portfolio_action = None
+    try:
+        pf_value = portfolio_value or ((position_qty * (avg_cost or current_price or 0.0)) or 100_000.0)
+        ctx = _Ctx(
+            current_price=current_price or 0.0,
+            portfolio_value=pf_value,
+            quantity=position_qty,
+            avg_cost=avg_cost,
+            target_weight=target_weight,
+        )
+        dec = _recommend(final_state, ctx, stop_price=stop_price)
+        portfolio_action = {
+            "action": dec.action.value,
+            "trade_shares": dec.trade_shares,
+            "trade_value": dec.trade_value,
+            "trade_pct_of_position": dec.trade_pct_of_position,
+            "new_weight": dec.new_weight,
+            "pnl_pct": dec.pnl_pct,
+            "rationale": dec.rationale,
+        }
+    except Exception as e:
+        logger.warning(f"[{symbol}] portfolio action failed: {e}")
+
     return ConsolidatedSignal(
         symbol=symbol,
         final_state=FinalState(final_state),
@@ -380,4 +489,10 @@ async def run_consolidated_analysis(db: AsyncSession, instrument_id) -> Consolid
         strategy_breakdown=strategy_breakdown,
         debate_included=debate is not None,
         llm_used=True,
+        current_price=current_price,
+        horizon_days=horizon_days,
+        till_date=expires.isoformat(),
+        entry_probability=entry_probability,
+        entry_plan=entry_plan,
+        portfolio_action=portfolio_action,
     )

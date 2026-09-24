@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useInstruments } from "@/hooks/useApi";
-import { signals as signalsApi } from "@/lib/api";
+import { signals as signalsApi, analysis } from "@/lib/api";
+import type { AnalysisJobStatus } from "@/lib/api";
 import Link from "next/link";
 import {
   Activity,
@@ -50,6 +51,62 @@ interface SignalData {
   created_at: string;
 }
 
+/* ── Full-analysis result types (consolidated signal) ── */
+
+interface LadderRung {
+  trigger: string;
+  fraction: number; // fraction of the intended position to deploy here (0..1)
+  note: string;
+}
+
+interface EntryPlan {
+  plain_language: string;
+  dream_entry: number;
+  prob_reach_entry: number; // 0..1 — P(touch dream_entry within horizon)
+  likely_to_miss: boolean;
+  expected_entry: number | null;
+  ladders: LadderRung[];
+  win_before_stop?: number; // 0..1
+}
+
+interface PortfolioAction {
+  action: "INITIATE" | "ADD" | "TRIM" | "EXIT" | "HOLD" | "WATCH" | "AVOID";
+  trade_shares: number; // signed: +buy / -sell
+  trade_value: number; // signed $
+  trade_pct_of_position: number; // 0..1 of current position
+  new_weight: number; // 0..1 projected weight after the trade
+  pnl_pct: number; // fraction return vs entry (0.05 = +5%)
+  rationale: string;
+}
+
+interface StrategyBreakdownItem {
+  strategy: string;
+  state: string;
+  win_rate?: number | null;
+}
+
+interface FullAnalysisItem {
+  instrument_id?: string;
+  symbol?: string | null;
+  final_state?: string;
+  final_confidence?: number;
+  summary?: string | null;
+  entry_zone?: string | null;
+  stop_loss?: string | null;
+  take_profit?: string | null;
+  risk_level?: string | null;
+  risk_reasoning?: string | null;
+  strategy_breakdown?: StrategyBreakdownItem[] | null;
+  llm_used?: boolean;
+  current_price?: number | null;
+  horizon_days?: number | null;
+  till_date?: string | null;
+  entry_probability?: number | null;
+  entry_plan?: EntryPlan | null;
+  portfolio_action?: PortfolioAction | null;
+  error?: string | null;
+}
+
 /* ── State styling ── */
 
 const STATE_CONFIG: Record<string, { color: string; bg: string; icon: any; label: string }> = {
@@ -60,6 +117,41 @@ const STATE_CONFIG: Record<string, { color: string; bg: string; icon: any; label
   WATCH: { color: "text-surface-700", bg: "bg-surface-200", icon: Eye, label: "Watch" },
   NO_SIGNAL: { color: "text-surface-400", bg: "bg-surface-200", icon: Minus, label: "No Signal" },
 };
+
+/* ── Portfolio-action styling ── */
+
+const ACTION_CONFIG: Record<string, { color: string; bg: string; icon: any; label: string }> = {
+  INITIATE: { color: "text-success-600", bg: "bg-green-50", icon: TrendingUp, label: "Initiate" },
+  ADD: { color: "text-success-600", bg: "bg-green-50", icon: TrendingUp, label: "Add" },
+  TRIM: { color: "text-warning-600", bg: "bg-amber-50", icon: Minus, label: "Trim" },
+  EXIT: { color: "text-danger-600", bg: "bg-red-50", icon: TrendingDown, label: "Exit" },
+  HOLD: { color: "text-primary-600", bg: "bg-blue-50", icon: Eye, label: "Hold" },
+  WATCH: { color: "text-surface-700", bg: "bg-surface-200", icon: Eye, label: "Watch" },
+  AVOID: { color: "text-danger-600", bg: "bg-red-50", icon: XCircle, label: "Avoid" },
+};
+
+/* ── Small helpers ── */
+
+/** "just now" / "3m ago" / "2h ago" / "5d ago" */
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+/** "Sep 30" from an ISO date string (timezone-safe for date-only strings) */
+function formatTillDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 const STATE_GUIDANCE: Record<string, string> = {
   ENTER_LONG: "This strategy sees a buy setup right now. Consider entering within the entry zone below, with the stop-loss at the invalidation level.",
@@ -78,6 +170,78 @@ const GATE_CONFIG: Record<string, { color: string; icon: any }> = {
   WARN: { color: "text-warning-500", icon: AlertTriangle },
   FAIL: { color: "text-danger-500", icon: XCircle },
 };
+
+/* ── Full-analysis detail blocks ── */
+
+function PortfolioActionBlock({ action }: { action: PortfolioAction }) {
+  const cfg = ACTION_CONFIG[action.action] || ACTION_CONFIG.WATCH;
+  const ActionIcon = cfg.icon;
+  const shares = Math.abs(action.trade_shares);
+  const value = Math.abs(action.trade_value);
+  return (
+    <div className="rounded-lg bg-surface-200 p-3 mb-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${cfg.bg} ${cfg.color}`}>
+          <ActionIcon className="w-3 h-3" />
+          {cfg.label}
+        </span>
+        <span className={`text-xs font-mono font-medium ${format.changeColor(action.pnl_pct)}`}>
+          P&L {format.pct(action.pnl_pct * 100, 1)}
+        </span>
+        {(shares > 0 || value > 0) && (
+          <span className="text-xs text-surface-700">
+            {action.trade_shares < 0 ? "Sell" : "Buy"}{" "}
+            {shares.toLocaleString(undefined, { maximumFractionDigits: 2 })} sh ·{" "}
+            {format.currency(value)}
+            {action.trade_pct_of_position > 0 && (
+              <span className="text-surface-500"> ({Math.round(action.trade_pct_of_position * 100)}% of position)</span>
+            )}
+          </span>
+        )}
+        <span className="text-xs text-surface-500">Target weight {Math.round(action.new_weight * 100)}%</span>
+      </div>
+      <p className="text-xs text-surface-700 mt-1.5">{action.rationale}</p>
+    </div>
+  );
+}
+
+function EntryPlanBlock({ plan }: { plan: EntryPlan }) {
+  const asPct = (v: number) => `${Math.round(v * 100)}%`;
+  return (
+    <div className="rounded-lg bg-surface-200 p-3 mb-3">
+      <p className="text-xs font-medium text-surface-900 mb-1">Entry Plan</p>
+      <p className="text-sm text-surface-700 mb-2">{plan.plain_language}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="px-2 py-0.5 text-xs font-mono bg-primary-50 text-primary-700 rounded-full">
+          P(reach {format.currency(plan.dream_entry)}) = {asPct(plan.prob_reach_entry)}
+        </span>
+        {plan.likely_to_miss && (
+          <span className="px-2 py-0.5 text-xs bg-amber-50 text-warning-600 rounded-full">Likely to miss</span>
+        )}
+        {plan.expected_entry != null && (
+          <span className="text-xs text-surface-700">
+            Expected entry: <span className="font-mono">{format.currency(plan.expected_entry)}</span>
+          </span>
+        )}
+        {plan.win_before_stop != null && (
+          <span className="text-xs text-surface-700">
+            P(win before stop) = <span className="font-mono">{asPct(plan.win_before_stop)}</span>
+          </span>
+        )}
+      </div>
+      {plan.ladders.length > 0 && (
+        <ul className="mt-2 space-y-0.5">
+          {plan.ladders.map((rung, i) => (
+            <li key={i} className="text-xs text-surface-700">
+              <span className="font-mono">{asPct(rung.fraction)}</span> — {rung.trigger}
+              {rung.note ? <span className="text-surface-500"> ({rung.note})</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /* ── Signal Card ── */
 
@@ -378,97 +542,146 @@ export default function SignalsPage() {
   }, [horizonFilter, stateFilter]);
 
   const [generating, setGenerating] = useState(false);
-  const [fullAnalysisResults, setFullAnalysisResults] = useState<any[]>([]);
+  const [fullAnalysisResults, setFullAnalysisResults] = useState<FullAnalysisItem[]>([]);
   const [runningFull, setRunningFull] = useState(false);
   const [fullAnalysisError, setFullAnalysisError] = useState("");
   const [fullAnalysisProgress, setFullAnalysisProgress] = useState("");
   const [analysisMode, setAnalysisMode] = useState<"portfolio" | "discover" | null>(null);
+  const [lastRunAt, setLastRunAt] = useState<{ portfolio: string | null; discover: string | null }>({
+    portfolio: null,
+    discover: null,
+  });
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollFailuresRef = useRef(0);
+  const pollInFlightRef = useRef(false);
 
-  const runFullAnalysis = async (mode: "portfolio" | "discover") => {
-    setRunningFull(true);
-    setFullAnalysisError("");
-    setFullAnalysisResults([]);
-    setAnalysisMode(mode);
+  /* ── Last-run badge ── */
 
+  const refreshLastRun = async (mode: "portfolio" | "discover") => {
+    try {
+      const data = await analysis.lastRun(mode);
+      const at = data.last_run_at ?? null;
+      setLastRunAt((prev) =>
+        mode === "portfolio" ? { ...prev, portfolio: at } : { ...prev, discover: at },
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    refreshLastRun("portfolio");
+    refreshLastRun("discover");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Background job polling (non-blocking; cleared on unmount) ── */
+
+  const stopPolling = () => {
+    if (pollTimerRef.current !== null) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  // If the user navigates away, stop polling — the job keeps running server-side
+  // and the results are persisted, so nothing is lost.
+  useEffect(() => () => stopPolling(), []);
+
+  const refreshSignalsList = async () => {
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
-      let instrumentsToAnalyze: { id: string; symbol: string }[] = [];
-
-      if (mode === "portfolio") {
-        setFullAnalysisProgress("Loading portfolio holdings...");
-        const portRes = await fetch("/api/v1/portfolios", { headers: authHeader });
-        if (!portRes.ok) throw new Error("Failed to load portfolios");
-        const portfolios = await portRes.json();
-        if (portfolios.length === 0) {
-          setFullAnalysisError("No portfolios found — create one and add positions first.");
-          setRunningFull(false);
-          return;
-        }
-        // Use the first portfolio
-        const posRes = await fetch(`/api/v1/portfolios/${portfolios[0].id}/positions`, { headers: authHeader });
-        if (!posRes.ok) throw new Error("Failed to load positions");
-        const positions = await posRes.json();
-        instrumentsToAnalyze = positions.map((p: any) => ({ id: p.instrument_id, symbol: p.symbol }));
-
-        if (instrumentsToAnalyze.length === 0) {
-          setFullAnalysisError("Portfolio is empty — add some positions first.");
-          setRunningFull(false);
-          return;
-        }
-      } else {
-        setFullAnalysisProgress("Loading tracked instruments...");
-        const instRes = await fetch("/api/v1/instruments?page_size=100", { headers: authHeader });
-        if (!instRes.ok) throw new Error("Failed to load instruments");
-        const instData = await instRes.json();
-        instrumentsToAnalyze = (instData.items || []).map((i: any) => ({ id: i.id, symbol: i.symbol }));
-
-        if (instrumentsToAnalyze.length === 0) {
-          setFullAnalysisError("No instruments tracked yet — add some first.");
-          setRunningFull(false);
-          return;
-        }
-      }
-
-      const results: any[] = [];
-      for (let i = 0; i < instrumentsToAnalyze.length; i++) {
-        const inst = instrumentsToAnalyze[i];
-        setFullAnalysisProgress(`Analyzing ${inst.symbol} (${i + 1}/${instrumentsToAnalyze.length})...`);
-        try {
-          const res = await fetch(`/api/v1/signals/consolidated/${inst.id}`, {
-            method: "POST",
-            headers: authHeader,
-          });
-          if (!res.ok) {
-            results.push({ symbol: inst.symbol, error: "Analysis failed" });
-            continue;
-          }
-          const data = await res.json();
-          results.push(data);
-        } catch (innerErr) {
-          results.push({ symbol: inst.symbol, error: "Analysis failed for this instrument" });
-        }
-      }
-
-      setFullAnalysisResults(results);
-      setFullAnalysisProgress("");
-
-      // Refresh the raw signals list underneath
       const params = new URLSearchParams();
       params.set("page_size", "100");
       if (horizonFilter) params.set("horizon", horizonFilter);
       if (stateFilter) params.set("state", stateFilter);
-      const listRes = await fetch(`/api/v1/signals?${params}`, { headers: authHeader });
+      const listRes = await fetch(`/api/v1/signals?${params}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (listRes.ok) {
         const listData = await listRes.json();
         setSignals(listData.items);
         setTotal(listData.total);
       }
     } catch (e) {
-      setFullAnalysisError("Full analysis failed — check that the local LLM (Ollama) is running.");
       console.error(e);
-    } finally {
+    }
+  };
+
+  const startJobPolling = (jobId: string, mode: "portfolio" | "discover") => {
+    stopPolling();
+    pollFailuresRef.current = 0;
+
+    const tick = async () => {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+      try {
+        let job: AnalysisJobStatus;
+        try {
+          job = await analysis.job(jobId);
+          pollFailuresRef.current = 0;
+        } catch (pollErr) {
+          // Transient poll failure — keep trying a few times before giving up.
+          console.error(pollErr);
+          pollFailuresRef.current += 1;
+          if (pollFailuresRef.current >= 5) {
+            stopPolling();
+            setRunningFull(false);
+            setFullAnalysisProgress("");
+            setFullAnalysisError(
+              "Lost contact while the analysis was running — it continues in the background; run it again later to pick up the results.",
+            );
+          }
+          return;
+        }
+
+        if (job.status === "RUNNING") {
+          const done = job.progress?.done ?? 0;
+          const total = job.progress?.total ?? 0;
+          setFullAnalysisProgress(total > 0 ? `Analyzing ${done}/${total}...` : "Analyzing...");
+          return;
+        }
+
+        stopPolling();
+        setRunningFull(false);
+        setFullAnalysisProgress("");
+
+        if (job.status === "FAILED") {
+          setFullAnalysisError(
+            job.error || "Full analysis failed — check that the local LLM (Ollama) is running.",
+          );
+        } else {
+          setFullAnalysisResults(job.results ?? []);
+          await refreshSignalsList();
+        }
+        refreshLastRun(mode);
+      } finally {
+        pollInFlightRef.current = false;
+      }
+    };
+
+    tick();
+    pollTimerRef.current = setInterval(tick, 2500);
+  };
+
+  const runFullAnalysis = async (mode: "portfolio" | "discover") => {
+    setRunningFull(true);
+    setFullAnalysisError("");
+    setFullAnalysisResults([]);
+    setAnalysisMode(mode);
+    setFullAnalysisProgress("Starting background analysis...");
+
+    try {
+      // Kick off the run server-side — the heavy LLM chain runs in a background
+      // job, so the UI stays responsive and we only poll lightweight status.
+      const job = await analysis.run({ scope: mode });
+      setFullAnalysisProgress(job.total > 0 ? `Analyzing 0/${job.total}...` : "Analyzing...");
+      startJobPolling(job.job_id, mode);
+    } catch (e) {
+      console.error(e);
+      setFullAnalysisError(
+        "Failed to start full analysis — check that the backend (and local LLM) is running.",
+      );
       setRunningFull(false);
       setFullAnalysisProgress("");
     }
@@ -489,20 +702,8 @@ export default function SignalsPage() {
         body: JSON.stringify({ instrument_id: genInstrumentId }),
       });
       if (res.ok) {
-        const data = await res.json();
-        // Signals generated successfully
-        // Refresh signals list
-        const params = new URLSearchParams();
-        params.set("page_size", "100");
-        if (horizonFilter) params.set("horizon", horizonFilter);
-        if (stateFilter) params.set("state", stateFilter);
-        const token2 = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const listRes = await fetch(`/api/v1/signals?${params}`, { headers: token2 ? { Authorization: `Bearer ${token2}` } : {} });
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          setSignals(listData.items);
-          setTotal(listData.total);
-        }
+        // Signals generated successfully — refresh the list
+        await refreshSignalsList();
       }
     } catch (e) { console.error(e); }
     finally { setGenerating(false); }
@@ -529,26 +730,50 @@ export default function SignalsPage() {
             >
               {generating ? "Generating..." : "Generate"}
             </button>
-            <button
-              onClick={() => runFullAnalysis("portfolio")}
-              disabled={runningFull}
-              title="Run full analysis on your portfolio holdings with entry/stop/take profit recommendations"
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-            >
-              {runningFull && analysisMode === "portfolio"
-                ? fullAnalysisProgress || "Analyzing..."
-                : "Portfolio Analysis"}
-            </button>
-            <button
-              onClick={() => runFullAnalysis("discover")}
-              disabled={runningFull}
-              title="Discover & analyze all tracked instruments with entry/stop/take profit recommendations"
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {runningFull && analysisMode === "discover"
-                ? fullAnalysisProgress || "Analyzing..."
-                : "Discover → Analyze"}
-            </button>
+            <div className="flex flex-col gap-0.5">
+              <button
+                onClick={() => runFullAnalysis("portfolio")}
+                disabled={runningFull}
+                title="Run full analysis on your portfolio holdings with entry/stop/take profit recommendations"
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                {runningFull && analysisMode === "portfolio" ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {fullAnalysisProgress || "Analyzing..."}
+                  </>
+                ) : (
+                  "Portfolio Analysis"
+                )}
+              </button>
+              {lastRunAt.portfolio && (
+                <span className="text-[10px] text-surface-500 px-1 whitespace-nowrap">
+                  Last run {timeAgo(lastRunAt.portfolio)}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <button
+                onClick={() => runFullAnalysis("discover")}
+                disabled={runningFull}
+                title="Discover & analyze all tracked instruments with entry/stop/take profit recommendations"
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {runningFull && analysisMode === "discover" ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {fullAnalysisProgress || "Analyzing..."}
+                  </>
+                ) : (
+                  "Discover → Analyze"
+                )}
+              </button>
+              {lastRunAt.discover && (
+                <span className="text-[10px] text-surface-500 px-1 whitespace-nowrap">
+                  Last run {timeAgo(lastRunAt.discover)}
+                </span>
+              )}
+            </div>
             <select
               value={horizonFilter}
               onChange={(e) => setHorizonFilter(e.target.value)}
@@ -605,7 +830,10 @@ export default function SignalsPage() {
       )}
       {runningFull && (
         <Card className="mb-6">
-          <p className="text-sm text-surface-700">{fullAnalysisProgress || "Analyzing..."}</p>
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-surface-500" />
+            <p className="text-sm text-surface-700">{fullAnalysisProgress || "Analyzing..."}</p>
+          </div>
         </Card>
       )}
       {fullAnalysisResults.length > 0 && (
@@ -623,7 +851,7 @@ export default function SignalsPage() {
             </button>
           </div>
           <div className="space-y-3">
-            {fullAnalysisResults.map((item: any, idx: number) => {
+            {fullAnalysisResults.map((item: FullAnalysisItem, idx: number) => {
               if (item.error) {
                 return (
                   <Card key={idx} className="border-danger-200">
@@ -637,6 +865,9 @@ export default function SignalsPage() {
                 item.final_state === "EXIT" ? "SELL" :
                 item.final_state === "REDUCE" ? "REDUCE" :
                 item.final_state === "WATCH" ? "WATCH" : "HOLD";
+              const pa = item.portfolio_action;
+              const plan = item.entry_plan;
+              const breakdown = item.strategy_breakdown ?? [];
               return (
                 <Card key={idx} className="cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all" onClick={() => {
                   if (item.instrument_id) window.location.href = `/instruments/view?id=${item.instrument_id}`;
@@ -658,8 +889,14 @@ export default function SignalsPage() {
                         {actionLabel}
                       </span>
                       <span className="text-xs text-surface-500">
-                        {Math.round(item.final_confidence)}% confidence
+                        {Math.round(item.final_confidence ?? 0)}% confidence
                       </span>
+                      {item.till_date && (
+                        <span className="text-xs text-surface-500">
+                          Till {formatTillDate(item.till_date)}
+                          {item.horizon_days != null ? ` (${item.horizon_days}d)` : ""}
+                        </span>
+                      )}
                       {!item.llm_used && (
                         <span className="text-xs text-warning-600">(mechanical vote only)</span>
                       )}
@@ -684,6 +921,12 @@ export default function SignalsPage() {
                     <span className="text-xs text-surface-500">{item.risk_reasoning}</span>
                   </div>
 
+                  {/* Portfolio-aware action */}
+                  {pa && <PortfolioActionBlock action={pa} />}
+
+                  {/* Probabilistic entry plan */}
+                  {plan && <EntryPlanBlock plan={plan} />}
+
                   <div className="grid md:grid-cols-3 gap-4 mb-3">
                     <div>
                       <p className="text-xs font-medium text-surface-900 mb-1">Entry</p>
@@ -699,13 +942,13 @@ export default function SignalsPage() {
                     </div>
                   </div>
 
-                  {item.strategy_breakdown?.length > 0 && (
+                  {breakdown.length > 0 && (
                     <details className="pt-3 border-t border-surface-300">
                       <summary className="text-xs font-medium text-surface-900 cursor-pointer">
-                        Show strategy breakdown ({item.strategy_breakdown.length})
+                        Show strategy breakdown ({breakdown.length})
                       </summary>
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {item.strategy_breakdown.map((s: any, sidx: number) => (
+                        {breakdown.map((s: StrategyBreakdownItem, sidx: number) => (
                           <span
                             key={sidx}
                             className="text-xs px-2 py-1 rounded-lg bg-surface-200 text-surface-700"
