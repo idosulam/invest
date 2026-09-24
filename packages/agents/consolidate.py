@@ -186,8 +186,7 @@ async def run_consolidated_analysis(
     # Reflect loop: deterministic lessons from past decisions feed the analysts.
     try:
         from packages.agents.reflect import lessons_block as _lessons_block
-        from packages.agents.memory import DecisionMemoryLog
-        reflect_lessons = _lessons_block(DecisionMemoryLog().load_entries())
+        reflect_lessons = _lessons_block(memory.load_entries())
     except Exception:
         reflect_lessons = ""
 
